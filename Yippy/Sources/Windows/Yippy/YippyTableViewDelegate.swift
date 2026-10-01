@@ -13,4 +13,13 @@ protocol YippyTableViewDelegate {
     func yippyTableView(_ yippyTableView: YippyTableView, selectedDidChange selected: Int?)
     
     func yippyTableView(_ yippyTableView: YippyTableView, didMoveItem from: Int, to: Int)
+
+    /// Whether the item is one of the favourites, for the heart on its row.
+    func yippyTableView(_ yippyTableView: YippyTableView, isFavourite item: HistoryItem) -> Bool
+
+    /// The heart on the item's row, or the menu item, was clicked.
+    func yippyTableView(_ yippyTableView: YippyTableView, didToggleFavouriteOf item: HistoryItem)
+
+    /// The item's context menu asked for it to be pasted.
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestPasteOf item: HistoryItem, plainText: Bool)
 }

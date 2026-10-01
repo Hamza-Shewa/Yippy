@@ -91,6 +91,7 @@ class YippyHotKeyTests: XCTestCase {
     func testInPanelHotKeysOnlyActiveWhilePanelShown() {
         // ⌘\ used to stay active while the panel was hidden
         XCTAssertTrue(YippyHotKeys.inPanel.contains(where: { $0 === YippyHotKeys.cmdBackslash }))
+        XCTAssertTrue(YippyHotKeys.inPanel.contains(where: { $0 === YippyHotKeys.shiftReturn }))
         
         // The test host is the app, so the history panel's view controller has bound these
         State.main.isHistoryPanelShown.accept(true)

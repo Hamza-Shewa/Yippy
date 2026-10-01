@@ -39,11 +39,15 @@ class YippyHistory {
         return history.items.firstIndex(where: { $0.fsId == id })
     }
     
-    func paste(selected: Int) {
+    /// Pastes the item shown at `selected`.
+    ///
+    /// - Parameter plainText: Paste only the item's text, without any styling. Items with no text are pasted as they are.
+    func paste(selected: Int, plainText: Bool = false) {
         guard let index = historyIndex(ofRow: selected) else {
             return
         }
-        
+        let plainString = plainText ? items[selected].getUnstyledText() : nil
+
         if movesPastedItemToTop {
             // Internally action the pasteboard change
             // Our pasteboard monitor will detect the change
@@ -58,8 +62,13 @@ class YippyHistory {
         }
         
         // Write object
-        pasteboard.writeObjects([items[selected]])
-        
+        if let plainString = plainString {
+            pasteboard.setString(plainString, forType: .string)
+        }
+        else {
+            pasteboard.writeObjects([items[selected]])
+        }
+
         DispatchQueue.global().async {
             DispatchQueue.main.async {
                 self.executePaste(startTime: Date())
@@ -88,8 +97,9 @@ class YippyHistory {
         }
         
         history.deleteItem(at: index)
-        if index == 0 {
+        if index == 0 && movesPastedItemToTop {
             // If we want to remove this, then we may have to change the `HistoryItem` writingOptions() to not `.promised`, because if something is pasted from history, then deleted, it can no longer satisfy the promise.
+            // Only the clipboard history has its top item on the pasteboard. The favourites' order doesn't follow the pasteboard, so removing the first favourite must not wipe whatever was copied.
             pasteboard.clearContents()
         }
         

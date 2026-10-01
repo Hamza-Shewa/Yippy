@@ -95,6 +95,7 @@ class YippyViewController: NSViewController {
         YippyHotKeys.pageUp.onLong(goToPreviousItem)
         YippyHotKeys.escape.onDown(close)
         YippyHotKeys.return.onDown(pasteSelected)
+        YippyHotKeys.shiftReturn.onDown(pasteSelectedAsPlainText)
         YippyHotKeys.ctrlAltCmdLeftArrow.onDown { State.main.panelPosition.accept(.left) }
         YippyHotKeys.ctrlAltCmdRightArrow.onDown { State.main.panelPosition.accept(.right) }
         YippyHotKeys.ctrlAltCmdDownArrow.onDown { State.main.panelPosition.accept(.bottom) }
@@ -168,6 +169,10 @@ class YippyViewController: NSViewController {
         if selectedGroup.value == .favourites {
             refreshResults()
         }
+        else {
+            // The hearts in the clipboard list may have changed
+            yippyHistoryView.refreshFavouriteButtons()
+        }
     }
     
     /// Shows the selected group's items, filtered by the search if there is one.
@@ -240,6 +245,13 @@ class YippyViewController: NSViewController {
         }
     }
     
+    /// Pastes the selected item's text without any styling, for when the copied text carries formatting that shouldn't come along.
+    func pasteSelectedAsPlainText() {
+        if let selected = self.yippyHistoryView.selected {
+            paste(selected: selected, plainText: true)
+        }
+    }
+    
     func deleteSelected() {
         if let selected = self.yippyHistoryView.selected {
             self.selected.accept(yippyHistory.delete(selected: selected))
@@ -278,12 +290,29 @@ class YippyViewController: NSViewController {
         guard let row = yippyHistoryView.selected, yippyHistory.items.indices.contains(row) else {
             return
         }
+        toggleFavourite(of: yippyHistory.items[row])
+    }
+    
+    /// Like `toggleFavourite()`, for any item shown rather than the selected one.
+    func toggleFavourite(of item: HistoryItem) {
         if yippyHistory.history === State.main.favourites {
-            deleteSelected()
+            guard let row = yippyHistory.items.firstIndex(where: { $0.fsId == item.fsId }) else {
+                return
+            }
+            self.selected.accept(yippyHistory.delete(selected: row))
         }
         else {
-            State.main.favourites.toggleFavourite(yippyHistory.items[row])
+            State.main.favourites.toggleFavourite(item)
         }
+    }
+    
+    /// Whether the item is one of the favourites.
+    func isFavourite(_ item: HistoryItem) -> Bool {
+        // Everything in the favourites list is one
+        if yippyHistory.history === State.main.favourites {
+            return true
+        }
+        return State.main.favourites.containsItem(withSameContentAs: item)
     }
     
     func selectGroup(_ group: ItemGroup) {
@@ -338,9 +367,9 @@ class YippyViewController: NSViewController {
         }
     }
     
-    private func paste(selected: Int) {
+    private func paste(selected: Int, plainText: Bool = false) {
         self.close()
-        yippyHistory.paste(selected: selected)
+        yippyHistory.paste(selected: selected, plainText: plainText)
     }
 }
 
@@ -358,6 +387,22 @@ extension YippyViewController: YippyTableViewDelegate {
     func yippyTableView(_ yippyTableView: YippyTableView, didMoveItem from: Int, to: Int) {
         yippyHistory.move(from: from, to: to)
         selected.accept(to)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, isFavourite item: HistoryItem) -> Bool {
+        return isFavourite(item)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didToggleFavouriteOf item: HistoryItem) {
+        toggleFavourite(of: item)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestPasteOf item: HistoryItem, plainText: Bool) {
+        // The item may not be the selected one, and may be gone by the time the menu item is chosen
+        guard let row = yippyHistory.items.firstIndex(where: { $0.fsId == item.fsId }) else {
+            return
+        }
+        paste(selected: row, plainText: plainText)
     }
 }
 
