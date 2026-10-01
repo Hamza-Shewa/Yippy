@@ -66,6 +66,15 @@ class YippyHistoryTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "d")
     }
     
+    func testPasteFromFavouritesKeepsOrder() {
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard, movesPastedItemToTop: false)
+        
+        yippyHistory.paste(selected: 2)
+        
+        XCTAssertEqual(historyStrings(), ["a", "b", "c", "d"])
+        XCTAssertEqual(pasteboard.string(forType: .string), "c")
+    }
+    
     // MARK: - delete(selected:)
     
     func testDeleteFromSearchResultsDeletesTheShownItem() {

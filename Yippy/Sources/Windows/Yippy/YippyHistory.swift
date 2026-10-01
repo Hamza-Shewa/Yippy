@@ -16,10 +16,14 @@ class YippyHistory {
     
     let pasteboard: NSPasteboard
     
-    init(history: History, items: [HistoryItem], pasteboard: NSPasteboard = .general) {
+    /// Whether pasting an item moves it to the top. True for the clipboard history, false for favourites, which keep their order.
+    let movesPastedItemToTop: Bool
+    
+    init(history: History, items: [HistoryItem], pasteboard: NSPasteboard = .general, movesPastedItemToTop: Bool = true) {
         self.history = history
         self.items = items
         self.pasteboard = pasteboard
+        self.movesPastedItemToTop = movesPastedItemToTop
     }
     
     /// Finds where the item shown at `row` currently sits in the full history.
@@ -40,12 +44,18 @@ class YippyHistory {
             return
         }
         
-        // Internally action the pasteboard change
-        // Our pasteboard monitor will detect the change
-        // But our `History` will know that it has already been consumed
-        history.moveItem(at: index, to: 0)
-        let newChangeCount = pasteboard.clearContents()
-        history.recordPasteboardChange(withCount: newChangeCount)
+        if movesPastedItemToTop {
+            // Internally action the pasteboard change
+            // Our pasteboard monitor will detect the change
+            // But our `History` will know that it has already been consumed
+            history.moveItem(at: index, to: 0)
+            let newChangeCount = pasteboard.clearContents()
+            history.recordPasteboardChange(withCount: newChangeCount)
+        }
+        else {
+            // Leave the change for the clipboard history to pick up like any other copy
+            pasteboard.clearContents()
+        }
         
         // Write object
         pasteboard.writeObjects([items[selected]])

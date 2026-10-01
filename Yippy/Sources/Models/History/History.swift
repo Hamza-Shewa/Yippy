@@ -75,6 +75,8 @@ class History {
     /// These pasteboard item types will not be saved.
     private let pasteboardTypeIgnoreList = Set([
         "dyn.ah62d4rv4gu8zg55zsmv0nvperf4g86varvu0635zqfx0nkdsqf00nkduqf31k3pcr7u1e3basv61a3k",
+        // Yippy's own item id, written alongside every item it pastes (e.g. from favourites)
+        HistoryItem.historyItemIdType.rawValue,
     ].map({NSPasteboard.PasteboardType(rawValue: $0)}));
     
     init(historyFM: HistoryFileManager = .default, cache: HistoryCache, items: [HistoryItem], maxItems: Int = Constants.system.maxHistoryItems) {
