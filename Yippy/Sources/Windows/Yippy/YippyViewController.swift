@@ -28,10 +28,7 @@ class YippyViewController: NSViewController {
     
     var yippyHistory = YippyHistory(history: State.main.history, items: [])
     
-    var searchEngine = SearchEngine(data: [])
-    /// The history items behind each entry of `searchEngine`'s data, in the same order.
-    /// Items without plain text are not searchable, so this is not the same as the history.
-    var searchableItems = [HistoryItem]()
+    let searchEngine = SearchEngine()
     
     let disposeBag = DisposeBag()
     
@@ -145,7 +142,6 @@ class YippyViewController: NSViewController {
     }
     
     func onHistoryChange(_ history: [HistoryItem], change: History.Change) {
-        updateSearchEngine(items: history)
         if !searchBar.stringValue.isEmpty {
             runSearch()
         }
@@ -160,25 +156,6 @@ class YippyViewController: NSViewController {
             default: break;
             }
         }
-    }
-    
-    func updateSearchEngine(items: [HistoryItem]) {
-        let (searchable, data) = YippyViewController.searchableItems(in: items)
-        self.searchableItems = searchable
-        self.searchEngine = SearchEngine(data: data)
-    }
-    
-    /// Splits out the items that can be searched (those with plain text) along with their text, in matching order.
-    static func searchableItems(in items: [HistoryItem]) -> (items: [HistoryItem], data: [String]) {
-        var searchable = [HistoryItem]()
-        var data = [String]()
-        for item in items {
-            if let str = item.getPlainString() {
-                searchable.append(item)
-                data.append(str)
-            }
-        }
-        return (searchable, data)
     }
     
     func onAllChange(_ results: Results, _ selected: (Int?, Int?)) {
@@ -278,16 +255,15 @@ class YippyViewController: NSViewController {
     }
     
     func runSearch() {
-        // Result indices refer to the engine's data, so map them through the items it was built from.
-        let searchableItems = self.searchableItems
-        searchEngine.search(query: searchBar.stringValue, completion: { result in
-            if (result.query.query.isEmpty) {
-                self.results.accept(Results(items: State.main.history.items, isSearchResult: false))
-                return
-            }
-            
-            let filteredData = result.results.map({ searchableItems[$0] })
-            self.results.accept(Results(items: filteredData, isSearchResult: true))
+        let query = searchBar.stringValue
+        if query.isEmpty {
+            searchEngine.cancel()
+            results.accept(Results(items: State.main.history.items, isSearchResult: false))
+            return
+        }
+        
+        searchEngine.search(query: query, in: State.main.history.items, completion: { matches in
+            self.results.accept(Results(items: matches, isSearchResult: true))
         })
     }
     

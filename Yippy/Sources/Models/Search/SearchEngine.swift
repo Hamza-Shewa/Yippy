@@ -8,113 +8,75 @@
 
 import Foundation
 
-struct SearchQuery: Hashable, Equatable {
-    
-    var query: String
-    
-    // Enfore the data invariant
-    private init(query: String) {
-        self.query = query
-    }
-    
-    static func fromRawText(_ str: String) -> SearchQuery {
-        return SearchQuery(query: str)
-    }
-}
-
-public class SearchResult {
-    
-    var query: SearchQuery
-    var results: [Int] = []
-    var items: Int
-    var completed: Int = 0
-    
-    var isFinished: Bool {
-        return completed == items
-    }
-    
-    init(query: SearchQuery, items: Int) {
-        self.query = query
-        self.items = items
-    }
-    
-    func addResult(_ i: Int) {
-        results.append(i)
-        results.sort()
-        completed += 1
-    }
-    
-    func recordFailure() {
-        completed += 1
-    }
-}
-
+/// Fuzzy searches the plain text of history items off the main thread.
+///
+/// Each item's folded text is read once and cached by item id, so searching again after the history changes only reads the new items.
+/// Starting a search supersedes any search still running: it stops early and its completion is never called.
 public class SearchEngine {
     
-    var results = [SearchQuery: SearchResult]()
+    private let queue = DispatchQueue(label: "MatthewDavidson.Yippy.SearchEngine", qos: .userInitiated)
     
-    var inProgress = [SearchQuery]()
+    /// Folded plain text by item id, or nil for items without plain text. Only accessed on `queue`.
+    private var texts = [UUID: String?]()
     
-    var sem = DispatchSemaphore(value: 1)
+    /// Bumped by every search and cancel. Guarded by `lock`, since running searches read it to stop early.
+    private var generation = 0
+    private let lock = NSLock()
     
-    var data: [String]
-    
-    init(data: [String]) {
-        self.data = data
+    private func nextGeneration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        generation += 1
+        return generation
     }
     
-    public func search(query: String, completion: @escaping (SearchResult) -> Void) {
-        let searchQuery = SearchQuery.fromRawText(query)
+    private func isCurrent(_ g: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return g == generation
+    }
+    
+    /// Searches `items` for `query`.
+    ///
+    /// - Parameter completion: Called on the main queue with the matching items in their original order, unless another search or `cancel()` comes first.
+    func search(query: String, in items: [HistoryItem], completion: @escaping ([HistoryItem]) -> Void) {
+        let g = nextGeneration()
+        let needle = foldForSearch(query)
         
-        if let result = findResult(forQuery: searchQuery) {
-            return completion(result)
-        }
-        
-        DispatchQueue.global().async {
-            self.sem.wait()
-            self.inProgress.append(searchQuery)
-            self.sem.signal()
-            
-            // Do something
-            let resSem = DispatchSemaphore(value: 1)
-            let searchResult = SearchResult(query: searchQuery, items: self.data.count)
-            for (i, d) in self.data.enumerated() {
-                DispatchQueue.global().async {
-                    if performSearch(needle: searchQuery.query, haystack: d) {
-                        resSem.wait()
-                        searchResult.addResult(i)
-                        resSem.signal()
-                    }
-                    else {
-                        resSem.wait()
-                        searchResult.recordFailure()
-                        resSem.signal()
-                    }
+        queue.async {
+            var matches = [HistoryItem]()
+            for item in items {
+                guard self.isCurrent(g) else {
+                    return
+                }
+                if let text = self.text(for: item), isSubsequence(needle, of: text) {
+                    matches.append(item)
                 }
             }
             
-            self.finishSearch(searchResult: searchResult, update: completion) {
-                self.sem.wait()
-                self.inProgress.removeAll(where: {$0 == searchQuery})
-                self.results[searchQuery] = searchResult
-                self.sem.signal()
+            // Forget items that are no longer in the history
+            let ids = Set(items.map({ $0.fsId }))
+            self.texts = self.texts.filter({ ids.contains($0.key) })
+            
+            DispatchQueue.main.async {
+                if self.isCurrent(g) {
+                    completion(matches)
+                }
             }
         }
     }
     
-    private func finishSearch(searchResult: SearchResult, update: @escaping (SearchResult) -> (), completion: @escaping () -> ()) {
-        if searchResult.isFinished {
-            update(searchResult)
-            completion()
-            return
-        }
-        
-        DispatchQueue.global().asyncAfter(deadline: DispatchTime.now() + 0.1, execute: {
-            self.finishSearch(searchResult: searchResult, update: update, completion: completion)
-        })
+    /// Stops any running search from completing.
+    func cancel() {
+        _ = nextGeneration()
     }
     
-    private func findResult(forQuery query: SearchQuery) -> SearchResult? {
-        return results[query]
+    private func text(for item: HistoryItem) -> String? {
+        if let text = texts[item.fsId] {
+            return text
+        }
+        let text = item.getPlainString().map(foldForSearch)
+        texts[item.fsId] = text
+        return text
     }
 }

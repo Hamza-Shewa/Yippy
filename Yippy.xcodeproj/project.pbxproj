@@ -141,6 +141,7 @@
 		34EC0FF92504ADE7004E1A63 /* SearchEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EC0FF82504ADE7004E1A63 /* SearchEngine.swift */; };
 		34F1047D23542CCE00B65251 /* HistoryItem+YippyItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F1047C23542CCE00B65251 /* HistoryItem+YippyItem.swift */; };
 		34F1047E23542D1600B65251 /* PasteboardType+Codable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 345BAE3323500E4B008ACB4C /* PasteboardType+Codable.swift */; };
+		6EDCDE70EDD293235425F0EF /* SearchEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A8DB3BDAC8F66AEB466DCA /* SearchEngineTests.swift */; };
 		97B8D3E776DEB8A0201AA128 /* YippyHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 463049263873C1BC37CA7667 /* YippyHistoryTests.swift */; };
 		B8A057305B33D2028FC0EC05 /* Pods_YippyUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 06717A6CF5535260A83784EF /* Pods_YippyUITests.framework */; };
 		D104B1D4E210055A8E6424F0 /* Pods_YippyTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1AA8E9C3FA65CDE7DA527C7 /* Pods_YippyTests.framework */; };
@@ -308,6 +309,7 @@
 		497AE5F620140FB1A3632D80 /* Pods-YippyTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YippyTests.debug.xcconfig"; path = "Target Support Files/Pods-YippyTests/Pods-YippyTests.debug.xcconfig"; sourceTree = "<group>"; };
 		6345AD4696DA11C3A58F38CB /* Pods-Yippy.beta debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yippy.beta debug.xcconfig"; path = "Target Support Files/Pods-Yippy/Pods-Yippy.beta debug.xcconfig"; sourceTree = "<group>"; };
 		B1AA8E9C3FA65CDE7DA527C7 /* Pods_YippyTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_YippyTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2A8DB3BDAC8F66AEB466DCA /* SearchEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SearchEngineTests.swift; sourceTree = "<group>"; };
 		B7B2145CEF513C8B71E739A5 /* Pods-YippyUITests.xctest.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YippyUITests.xctest.xcconfig"; path = "Target Support Files/Pods-YippyUITests/Pods-YippyUITests.xctest.xcconfig"; sourceTree = "<group>"; };
 		C0ACFCB0B26BF8B8E6EF42EA /* Pods_Yippy.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Yippy.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C555279B4167FBDCA36E01CC /* Pods-YippyUITests.beta debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YippyUITests.beta debug.xcconfig"; path = "Target Support Files/Pods-YippyUITests/Pods-YippyUITests.beta debug.xcconfig"; sourceTree = "<group>"; };
@@ -732,6 +734,7 @@
 				34268117233DE4EB00BA226A /* YippyHotKeyTests.swift */,
 				34ACFBD122EB0B11004E6E63 /* YippyTests.swift */,
 				463049263873C1BC37CA7667 /* YippyHistoryTests.swift */,
+				B2A8DB3BDAC8F66AEB466DCA /* SearchEngineTests.swift */,
 			);
 			path = YippyTests;
 			sourceTree = "<group>";
@@ -1171,6 +1174,7 @@
 				34CA0202235D742000EB067C /* HistoryFileManagerMock.swift in Sources */,
 				343C0BF1235C57F600129D23 /* ArrayFileManagerMock.swift in Sources */,
 				97B8D3E776DEB8A0201AA128 /* YippyHistoryTests.swift in Sources */,
+				6EDCDE70EDD293235425F0EF /* SearchEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
