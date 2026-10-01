@@ -43,6 +43,10 @@ class State {
     var historyCache: HistoryCache!
     var history: History!
     
+    // Favourites, stored separately from the history (see `HistoryFileManager.favourites`)
+    var favouritesCache: HistoryCache!
+    var favourites: History!
+    
     /// Monitors the pasteboard, here it can be controlled in the future if needed.
     var pasteboardMonitor: PasteboardMonitor!
     
@@ -65,6 +69,12 @@ class State {
         self.history = History.load(cache: historyCache)
         self.history.recordPasteboardChange(withCount: settings.pasteboardChangeCount)
         self.history.setMaxItems(settings.maxHistory)
+        
+        // Setup favourites
+        try? HistoryFileManager.favourites.checkHistoryDirectory()
+        self.favouritesCache = HistoryCache(historyFM: .favourites)
+        self.favourites = History.load(historyFM: .favourites, cache: favouritesCache)
+        self.favourites.setMaxItems(Int.max)
         
         // Bind settings to state
         Self.bind(settings: settings, toState: self, disposeBag: disposeBag)
