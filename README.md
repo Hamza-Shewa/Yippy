@@ -29,13 +29,17 @@ There are 3 different schemes:
 
 __Yippy__ is used for running and archiving a production build of Yippy. __Yippy Beta__ is used for development and archiving a beta release. __Yippy XCTest__ is used exclusively for running the unit and UI tests.
 
-### Using `create-installer.sh`
-First install <a href="https://github.com/andreyvit/create-dmg" target="_blank">create-dmg</a>. Then place `X.app` in the same folder as `create-installer.sh`. Execute script:
+### Building an installer with `create-installer.sh`
+`./create-installer.sh` archives Yippy (Release, universal Intel + Apple Silicon), signs it and packages it as `build/installer/Yippy-<version>.dmg` with the app and an Applications shortcut to drag it onto. It only needs Xcode; if [create-dmg](https://github.com/create-dmg/create-dmg) is installed (`brew install create-dmg`) it's used for a nicer window layout.
+
 ```
-./create-installer.sh X
+./create-installer.sh                          # ad-hoc signed, for this Mac
+./create-installer.sh --scheme "Yippy Beta"    # beta build
+./create-installer.sh --sign "Developer ID Application: Name (TEAMID)" --notarize PROFILE
+./create-installer.sh --app path/to/Yippy.app  # package an existing build
 ```
 
-You will find the installer disk image `X.dmg` in the same folder.
+To share the installer, sign it with a Developer ID Application certificate and notarize it. Otherwise Gatekeeper blocks it on other Macs. Create the notary profile once with `xcrun notarytool store-credentials PROFILE`. `--appcast DIR` copies the `.dmg` into your releases folder and runs Sparkle's `generate_appcast` (see "Automatic updates"). Run `./create-installer.sh --help` for every option.
 
 ### Automatic updates
 Yippy uses [Sparkle](https://sparkle-project.org) for updates. It stays switched off (no updater, no "Check for Updates..." menu item) until `SUFeedURL` and `SUPublicEDKey` in `Yippy/Supporting Files/Info.plist` are filled in. To turn it on:
