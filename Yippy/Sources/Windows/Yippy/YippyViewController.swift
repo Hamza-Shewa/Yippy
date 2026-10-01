@@ -28,7 +28,7 @@ class YippyViewController: NSViewController {
     
     var yippyHistory = YippyHistory(history: State.main.history, items: [])
     
-    var searchEngine = SearchEngine(data: [])
+    let searchEngine = SearchEngine()
     
     let disposeBag = DisposeBag()
     
@@ -99,28 +99,9 @@ class YippyViewController: NSViewController {
         YippyHotKeys.cmd8.onDown { self.shortcutPressed(key: 8) }
         YippyHotKeys.cmd9.onDown { self.shortcutPressed(key: 9) }
         
-        bindHotKeyToYippyWindow(YippyHotKeys.downArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.upArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.return, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.escape, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageDown, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageUp, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdLeftArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdRightArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdDownArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdUpArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd0, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd1, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd2, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd3, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd4, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd5, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd6, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd7, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd8, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd9, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlDelete, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlSpace, disposeBag: disposeBag)
+        for hotKey in YippyHotKeys.inPanel {
+            bindHotKeyToYippyWindow(hotKey, disposeBag: disposeBag)
+        }
         
         searchBar.resignFirstResponder()
     }
@@ -142,7 +123,6 @@ class YippyViewController: NSViewController {
     }
     
     func onHistoryChange(_ history: [HistoryItem], change: History.Change) {
-        updateSearchEngine(items: history)
         if !searchBar.stringValue.isEmpty {
             runSearch()
         }
@@ -157,10 +137,6 @@ class YippyViewController: NSViewController {
             default: break;
             }
         }
-    }
-    
-    func updateSearchEngine(items: [HistoryItem]) {
-        self.searchEngine = SearchEngine(data: items.compactMap({$0.getPlainString()}))
     }
     
     func onAllChange(_ results: Results, _ selected: (Int?, Int?)) {
@@ -235,6 +211,10 @@ class YippyViewController: NSViewController {
     }
     
     func shortcutPressed(key: Int) {
+        // ⌘0-9 are registered whether or not there are that many items.
+        guard yippyHistory.items.indices.contains(key) else {
+            return
+        }
         paste(selected: key)
     }
     
@@ -256,18 +236,15 @@ class YippyViewController: NSViewController {
     }
     
     func runSearch() {
-        searchEngine.search(query: searchBar.stringValue, completion: { result in
-            if (result.query.query.isEmpty) {
-                self.results.accept(Results(items: State.main.history.items, isSearchResult: false))
-                return
-            }
-            
-            var filteredData = [HistoryItem]()
-            for i in result.results {
-                filteredData.append(State.main.history.items[i])
-            }
-            
-            self.results.accept(Results(items: filteredData, isSearchResult: true))
+        let query = searchBar.stringValue
+        if query.isEmpty {
+            searchEngine.cancel()
+            results.accept(Results(items: State.main.history.items, isSearchResult: false))
+            return
+        }
+        
+        searchEngine.search(query: query, in: State.main.history.items, completion: { matches in
+            self.results.accept(Results(items: matches, isSearchResult: true))
         })
     }
     

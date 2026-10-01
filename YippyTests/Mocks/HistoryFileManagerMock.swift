@@ -21,4 +21,11 @@ class HistoryFileManagerMock: HistoryFileManager {
         }
         return nil
     }
+    
+    // Keep history mutations in memory only.
+    override func insertItem(newHistory: [HistoryItem], at i: Int, completionHandler handler: ((Bool) -> Void)? = nil) {}
+    override func deleteItem(newHistory: [HistoryItem], deleted: HistoryItem, completionHandler handler: ((Bool) -> Void)? = nil) {}
+    override func moveItem(newHistory: [HistoryItem], from: Int, to: Int, completionHandler: ((Bool) -> Void)? = nil) {}
+    override func reduce(oldHistory: [HistoryItem], toSize size: Int, completionHandler handler: ((Bool) -> Void)? = nil) {}
+    override func clearHistory(completionHandler handler: ((Bool) -> Void)? = nil) {}
 }
