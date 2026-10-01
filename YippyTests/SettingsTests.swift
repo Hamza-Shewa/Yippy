@@ -76,4 +76,33 @@ class SettingsTests: XCTestCase {
         XCTAssertEqual(Settings.main.panelPosition, .bottom)
         XCTAssertEqual(Settings.main.pasteboardChangeCount, 42)
     }
+    
+    func testDecodesSettingsSavedBeforeIgnoredApps() throws {
+        // 1. Settings as saved by a version without `ignoredAppBundleIds`
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(Settings.default)) as! [String: Any]
+        json.removeValue(forKey: "ignoredAppBundleIds")
+        let old = try JSONSerialization.data(withJSONObject: json)
+        
+        // 2. Decode
+        let settings = try JSONDecoder().decode(Settings.self, from: old)
+        
+        // 3. Nothing else is lost and no apps are ignored
+        XCTAssertEqual(settings, Settings.default)
+        XCTAssertEqual(settings.ignoredAppBundleIds, [])
+    }
+    
+    func testIgnoredAppsPersist() {
+        let disposeBag = DisposeBag()
+        let ignored = BehaviorRelay<[String]>(value: [])
+        Settings.main.bindIgnoredAppBundleIdsTo(state: ignored.asObservable()).disposed(by: disposeBag)
+        
+        ignored.accept(["com.example.passwords"])
+        
+        XCTAssertEqual(Settings.main.ignoredAppBundleIds, ["com.example.passwords"])
+    }
+    
+    func testAddIgnoredAppSkipsDuplicates() {
+        XCTAssertEqual(IgnoredAppsSettingsViewController.add(bundleIds: ["b", "a", "c"], to: ["a"]), ["a", "b", "c"])
+        XCTAssertNil(IgnoredAppsSettingsViewController.add(bundleIds: ["a"], to: ["a"]))
+    }
 }

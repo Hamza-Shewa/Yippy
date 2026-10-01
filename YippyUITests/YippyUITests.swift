@@ -440,6 +440,37 @@ class YippyUITests: XCTestCase {
         XCTAssertEqual(remaining, allItems.filter({ $0 != "3" }))
     }
     
+    func testCopyingExistingItemMovesItToTop() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 3), "3")
+        app.pressHotKey()
+        
+        // Copy "3" again
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("3", forType: .string)
+        
+        // It moved to the top rather than being added again
+        app.pressHotKey()
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        XCTAssertEqual(app.yippyTableViewItems.count, count)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 1), "My latest copy")
+    }
+    
     func testTypes() {
         // Copy something
         NSPasteboard.general.declareTypes([.string], owner: nil)
