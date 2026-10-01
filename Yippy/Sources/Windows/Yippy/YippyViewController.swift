@@ -29,6 +29,9 @@ class YippyViewController: NSViewController {
     var yippyHistory = YippyHistory(history: State.main.history, items: [])
     
     var searchEngine = SearchEngine(data: [])
+    /// The history items behind each entry of `searchEngine`'s data, in the same order.
+    /// Items without plain text are not searchable, so this is not the same as the history.
+    var searchableItems = [HistoryItem]()
     
     let disposeBag = DisposeBag()
     
@@ -160,7 +163,22 @@ class YippyViewController: NSViewController {
     }
     
     func updateSearchEngine(items: [HistoryItem]) {
-        self.searchEngine = SearchEngine(data: items.compactMap({$0.getPlainString()}))
+        let (searchable, data) = YippyViewController.searchableItems(in: items)
+        self.searchableItems = searchable
+        self.searchEngine = SearchEngine(data: data)
+    }
+    
+    /// Splits out the items that can be searched (those with plain text) along with their text, in matching order.
+    static func searchableItems(in items: [HistoryItem]) -> (items: [HistoryItem], data: [String]) {
+        var searchable = [HistoryItem]()
+        var data = [String]()
+        for item in items {
+            if let str = item.getPlainString() {
+                searchable.append(item)
+                data.append(str)
+            }
+        }
+        return (searchable, data)
     }
     
     func onAllChange(_ results: Results, _ selected: (Int?, Int?)) {
@@ -235,6 +253,10 @@ class YippyViewController: NSViewController {
     }
     
     func shortcutPressed(key: Int) {
+        // ⌘0-9 are registered whether or not there are that many items.
+        guard yippyHistory.items.indices.contains(key) else {
+            return
+        }
         paste(selected: key)
     }
     
@@ -256,17 +278,15 @@ class YippyViewController: NSViewController {
     }
     
     func runSearch() {
+        // Result indices refer to the engine's data, so map them through the items it was built from.
+        let searchableItems = self.searchableItems
         searchEngine.search(query: searchBar.stringValue, completion: { result in
             if (result.query.query.isEmpty) {
                 self.results.accept(Results(items: State.main.history.items, isSearchResult: false))
                 return
             }
             
-            var filteredData = [HistoryItem]()
-            for i in result.results {
-                filteredData.append(State.main.history.items[i])
-            }
-            
+            let filteredData = result.results.map({ searchableItems[$0] })
             self.results.accept(Results(items: filteredData, isSearchResult: true))
         })
     }
