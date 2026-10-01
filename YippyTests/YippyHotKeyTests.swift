@@ -87,6 +87,22 @@ class YippyHotKeyTests: XCTestCase {
         // 3. Then the handler should be called multiple times
         waitForExpectations(timeout: 1.1, handler: nil)
     }
+    
+    func testInPanelHotKeysOnlyActiveWhilePanelShown() {
+        // ⌘\ used to stay active while the panel was hidden
+        XCTAssertTrue(YippyHotKeys.inPanel.contains(where: { $0 === YippyHotKeys.cmdBackslash }))
+        
+        // The test host is the app, so the history panel's view controller has bound these
+        State.main.isHistoryPanelShown.accept(true)
+        for hotKey in YippyHotKeys.inPanel {
+            XCTAssertFalse(hotKey.isPaused)
+        }
+        
+        State.main.isHistoryPanelShown.accept(false)
+        for hotKey in YippyHotKeys.inPanel {
+            XCTAssertTrue(hotKey.isPaused)
+        }
+    }
 }
 
 // MARK: - Partial Hot Key Mock

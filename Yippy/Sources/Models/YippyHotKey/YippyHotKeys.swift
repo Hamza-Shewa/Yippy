@@ -38,4 +38,16 @@ struct YippyHotKeys {
     static var cmd7 = YippyHotKey(key: .seven, modifiers: [.command])
     static var cmd8 = YippyHotKey(key: .eight, modifiers: [.command])
     static var cmd9 = YippyHotKey(key: .nine, modifiers: [.command])
+    
+    /// Keys that only act inside the history panel.
+    ///
+    /// Hot keys are registered system-wide, so `YippyViewController` pauses all of these while the panel is hidden. A new in-panel key must be added here, or it will take that key away from every other app.
+    static var inPanel: [YippyHotKey] {
+        return [
+            `return`, escape, downArrow, upArrow, pageDown, pageUp,
+            ctrlAltCmdLeftArrow, ctrlAltCmdRightArrow, ctrlAltCmdDownArrow, ctrlAltCmdUpArrow,
+            ctrlDelete, ctrlSpace, cmdBackslash, ctrlF,
+            cmd0, cmd1, cmd2, cmd3, cmd4, cmd5, cmd6, cmd7, cmd8, cmd9,
+        ]
+    }
 }

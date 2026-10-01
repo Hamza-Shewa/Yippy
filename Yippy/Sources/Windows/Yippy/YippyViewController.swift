@@ -116,29 +116,9 @@ class YippyViewController: NSViewController {
         YippyHotKeys.cmd8.onDown { self.shortcutPressed(key: 8) }
         YippyHotKeys.cmd9.onDown { self.shortcutPressed(key: 9) }
         
-        bindHotKeyToYippyWindow(YippyHotKeys.downArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.upArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.return, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.escape, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageDown, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageUp, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdLeftArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdRightArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdDownArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdUpArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd0, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd1, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd2, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd3, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd4, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd5, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd6, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd7, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd8, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd9, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlDelete, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlSpace, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlF, disposeBag: disposeBag)
+        for hotKey in YippyHotKeys.inPanel {
+            bindHotKeyToYippyWindow(hotKey, disposeBag: disposeBag)
+        }
         
         searchBar.resignFirstResponder()
     }
