@@ -149,6 +149,17 @@ class HistoryItem: NSObject {
         return String(data: data, encoding: .utf8)
     }
     
+    /// The item's text without any styling: the plain string if it has one, otherwise the text of its RTF.
+    func getUnstyledText() -> String? {
+        if let string = getPlainString(), !string.isEmpty {
+            return string
+        }
+        if let string = getRtfAttributedString()?.string, !string.isEmpty {
+            return string
+        }
+        return nil
+    }
+
     func getRtfAttributedString() -> NSAttributedString? {
         guard let data = data(forType: .rtf) else { return nil }
         return NSAttributedString(rtf: data, documentAttributes: nil)

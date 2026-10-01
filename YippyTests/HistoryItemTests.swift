@@ -36,6 +36,25 @@ class HistoryItemTests: XCTestCase {
         )
     }
     
+    // MARK: - getUnstyledText()
+    func testUnstyledTextPrefersThePlainString() {
+        let item = HistoryItem(unsavedData: [.string: "plain".data(using: .utf8)!, .rtf: "{\\rtf1\\ansi rich}".data(using: .utf8)!], cache: cache)
+        
+        XCTAssertEqual(item.getUnstyledText(), "plain")
+    }
+    
+    func testUnstyledTextFallsBackToRtf() {
+        let item = HistoryItem(unsavedData: [.rtf: "{\\rtf1\\ansi rich}".data(using: .utf8)!], cache: cache)
+        
+        XCTAssertEqual(item.getUnstyledText(), "rich")
+    }
+    
+    func testUnstyledTextNilWithoutText() {
+        let item = HistoryItem(unsavedData: [.png: Data([1])], cache: cache)
+        
+        XCTAssertNil(item.getUnstyledText())
+    }
+    
     // MARK: - data()
     func testDataForMissingType() {
         // 1. For an item without a type

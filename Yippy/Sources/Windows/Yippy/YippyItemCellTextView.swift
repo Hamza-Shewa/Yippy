@@ -15,6 +15,10 @@ class YippyItemCellTextView: NSTextView {
         self.nextResponder?.mouseDown(with: event)
     }
     
+    override func rightMouseDown(with event: NSEvent) {
+        self.nextResponder?.rightMouseDown(with: event)
+    }
+    
     var textInset: NSEdgeInsets = NSEdgeInsetsZero {
         didSet {
             textContainerInset = CGSize(width: (textInset.left + textInset.right)/2, height: (textInset.top + textInset.bottom)/2)

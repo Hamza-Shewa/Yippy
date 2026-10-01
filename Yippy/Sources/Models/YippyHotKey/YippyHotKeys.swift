@@ -12,6 +12,7 @@ struct YippyHotKeys {
     
     static var toggle = YippyHotKey(key: .v, modifiers: [.command, .shift])
     static var `return` = YippyHotKey(key: .return, modifiers: [])
+    static var shiftReturn = YippyHotKey(key: .return, modifiers: [.shift])
     static var escape = YippyHotKey(key: .escape, modifiers: [])
     static var downArrow = YippyHotKey(key: .downArrow, modifiers: [])
     static var upArrow = YippyHotKey(key: .upArrow, modifiers: [])
@@ -44,7 +45,7 @@ struct YippyHotKeys {
     /// Hot keys are registered system-wide, so `YippyViewController` pauses all of these while the panel is hidden. A new in-panel key must be added here, or it will take that key away from every other app.
     static var inPanel: [YippyHotKey] {
         return [
-            `return`, escape, downArrow, upArrow, pageDown, pageUp,
+            `return`, shiftReturn, escape, downArrow, upArrow, pageDown, pageUp,
             ctrlAltCmdLeftArrow, ctrlAltCmdRightArrow, ctrlAltCmdDownArrow, ctrlAltCmdUpArrow,
             ctrlDelete, ctrlSpace, cmdBackslash, ctrlF,
             cmd0, cmd1, cmd2, cmd3, cmd4, cmd5, cmd6, cmd7, cmd8, cmd9,

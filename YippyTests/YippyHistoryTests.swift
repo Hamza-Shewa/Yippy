@@ -75,7 +75,73 @@ class YippyHistoryTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "c")
     }
     
+    func testPastePlainTextDropsTheStyling() {
+        let styled = HistoryItem(unsavedData: [.string: "styled".data(using: .utf8)!, .rtf: "{\\rtf1\\ansi {\\b styled}}".data(using: .utf8)!], cache: cache)
+        history.insertItem(styled, at: 0)
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        
+        yippyHistory.paste(selected: 0, plainText: true)
+        
+        XCTAssertEqual(pasteboard.string(forType: .string), "styled")
+        XCTAssertNil(pasteboard.data(forType: .rtf))
+    }
+    
+    func testPastePlainTextMovesItemToTopLikeAPaste() {
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        
+        yippyHistory.paste(selected: 2, plainText: true)
+        
+        XCTAssertEqual(historyStrings(), ["c", "a", "b", "d"])
+        XCTAssertEqual(pasteboard.string(forType: .string), "c")
+    }
+    
+    func testPastePlainTextUsesTheTextOfRtfWhenThereIsNoPlainString() {
+        let rtfOnly = HistoryItem(unsavedData: [.rtf: "{\\rtf1\\ansi hello}".data(using: .utf8)!], cache: cache)
+        history.insertItem(rtfOnly, at: 0)
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        
+        yippyHistory.paste(selected: 0, plainText: true)
+        
+        XCTAssertEqual(pasteboard.string(forType: .string), "hello")
+        XCTAssertNil(pasteboard.data(forType: .rtf))
+    }
+    
+    func testPastePlainTextWithoutTextPastesTheItemAsItIs() {
+        let png = Data([1, 2, 3])
+        let image = HistoryItem(unsavedData: [.png: png], cache: cache)
+        history.insertItem(image, at: 0)
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        
+        yippyHistory.paste(selected: 0, plainText: true)
+        
+        XCTAssertEqual(pasteboard.data(forType: .png), png)
+        XCTAssertNil(pasteboard.string(forType: .string))
+    }
+    
     // MARK: - delete(selected:)
+    
+    func testDeleteTopOfClipboardClearsPasteboard() {
+        // The top item is what's on the pasteboard, and its data is about to go
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        pasteboard.clearContents()
+        pasteboard.setString("a", forType: .string)
+        
+        _ = yippyHistory.delete(selected: 0)
+        
+        XCTAssertNil(pasteboard.string(forType: .string))
+    }
+    
+    func testDeleteFirstFavouriteKeepsPasteboard() {
+        // Unfavouriting the first favourite must not wipe whatever was copied
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard, movesPastedItemToTop: false)
+        pasteboard.clearContents()
+        pasteboard.setString("copied", forType: .string)
+        
+        _ = yippyHistory.delete(selected: 0)
+        
+        XCTAssertEqual(historyStrings(), ["b", "c", "d"])
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied")
+    }
     
     func testDeleteFromSearchResultsDeletesTheShownItem() {
         let yippyHistory = YippyHistory(history: history, items: [b, d], pasteboard: pasteboard)

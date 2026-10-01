@@ -48,6 +48,45 @@ class FavouritesTests: XCTestCase {
         XCTAssertEqual(favourites.items.count, 2)
     }
     
+    // MARK: - containsItem(withSameContentAs:)
+    
+    func testContainsItemWithSameContent() {
+        favourites.toggleFavourite(item("a"))
+        
+        // A different item with the same content, like the one in the clipboard history
+        XCTAssertTrue(favourites.containsItem(withSameContentAs: item("a")))
+        XCTAssertFalse(favourites.containsItem(withSameContentAs: item("b")))
+    }
+    
+    func testContainsItemFollowsToggle() {
+        let a = item("a")
+        XCTAssertFalse(favourites.containsItem(withSameContentAs: a))
+        
+        favourites.toggleFavourite(a)
+        XCTAssertTrue(favourites.containsItem(withSameContentAs: a))
+        
+        favourites.toggleFavourite(a)
+        XCTAssertFalse(favourites.containsItem(withSameContentAs: a))
+    }
+    
+    func testContainsItemComparesAllTypes() {
+        favourites.toggleFavourite(item("a"))
+        let rich = HistoryItem(unsavedData: [.string: "a".data(using: .utf8)!, .rtf: "{\\rtf1 a}".data(using: .utf8)!], cache: HistoryCache())
+        
+        XCTAssertFalse(favourites.containsItem(withSameContentAs: rich))
+    }
+    
+    func testContainsItemComparesTheWholeData() {
+        // Same type, same length and the same start, but not the same bytes
+        let first = Data(count: 4096)
+        var second = first
+        second[4095] = 1
+        favourites.toggleFavourite(HistoryItem(unsavedData: [.png: first], cache: HistoryCache()))
+        
+        XCTAssertTrue(favourites.containsItem(withSameContentAs: HistoryItem(unsavedData: [.png: first], cache: HistoryCache())))
+        XCTAssertFalse(favourites.containsItem(withSameContentAs: HistoryItem(unsavedData: [.png: second], cache: HistoryCache())))
+    }
+    
     func testFavouritesAreNotTrimmed() {
         // State sets this so the clipboard history limit doesn't apply
         favourites.setMaxItems(Int.max)
