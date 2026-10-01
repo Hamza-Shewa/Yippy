@@ -200,19 +200,17 @@ class HistoryCacheTests: XCTestCase {
         // 2. Register the id
         cache.registerItem(withId: id)
         
-        // Wait for confirmation it is registered. Then unregister the item
+        // Wait for confirmation it is registered
         self.expectation(for: NSPredicate(block: { (_,_) -> Bool in
             return self.cache.isItemRegistered(id)
-        }), evaluatedWith: nil) { () -> Bool in
-            self.cache.unregisterItem(withId: id)
-            return true
-        }
+        }), evaluatedWith: nil, handler: nil)
+        waitForExpectations(timeout: 2, handler: nil)
         
-        // Wait for confirmation the item is unregistered.
+        // 3. Unregister the item and wait for confirmation it is unregistered.
+        cache.unregisterItem(withId: id)
         self.expectation(for: NSPredicate(block: { (_,_) -> Bool in
             return !self.cache.isItemRegistered(id)
         }), evaluatedWith: nil, handler: nil)
-        
         waitForExpectations(timeout: 2, handler: nil)
     }
 }

@@ -26,8 +26,29 @@ class YippyUITests: XCTestCase {
         app.launchEnvironment["SRCROOT"] = ProcessInfo.processInfo.environment["SRCROOT"]
     }
     
+    /// Opens the panel with the toggle hot key while another app is frontmost.
+    ///
+    /// Yippy only synthesizes ⌘V once it is no longer the active app, and on close it re-activates whichever app was frontmost when the panel opened. `app.typeKey` activates Yippy first, so send the hot key to Finder instead.
+    func pressHotKeyFromOtherApp() {
+        let finder = XCUIApplication(bundleIdentifier: "com.apple.finder")
+        finder.activate()
+        finder.typeKey("v", modifierFlags: [.command, .shift])
+        // Right after launch the hot key is occasionally missed, so try once more
+        if !app.yippyWindow.waitForExistence(timeout: 2) {
+            finder.activate()
+            finder.typeKey("v", modifierFlags: [.command, .shift])
+        }
+        XCTAssertTrue(app.yippyWindow.waitForExistence(timeout: 2))
+    }
+    
     func assertCmdV() {
-        let keyPress = KeyPressMock.handleKeyPress()
+        // The paste is synthesized asynchronously once Yippy is no longer active, so poll for it.
+        var keyPress = KeyPressMock.handleKeyPress()
+        let deadline = Date().addingTimeInterval(3)
+        while keyPress == nil && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            keyPress = KeyPressMock.handleKeyPress()
+        }
         // Assert there was a key press
         XCTAssertNotNil(keyPress)
         // Assert it was a c + cmd key press
@@ -212,7 +233,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         app.typeKey(.return)
         
         // Assert item was pasted
@@ -237,7 +258,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         // Select index 2
         app.getYippyTableViewCell(at: 2).click()
         app.typeKey(.return)
@@ -275,7 +296,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         // Use short cut for item index 2 (⌘ + 2)
         app.typeKey("2", modifierFlags: .command)
         
@@ -316,7 +337,7 @@ class YippyUITests: XCTestCase {
         // Select index 2
         app.getYippyTableViewCell(at: 2).click()
         // Delete
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the item is gone
         XCTAssertEqual(app.yippyTableViewItems.count, 4)
@@ -326,8 +347,8 @@ class YippyUITests: XCTestCase {
         XCTAssertEqual(app.getYippyTableViewItemString(at: 3), "4")
         
         // Delete again
-        app.typeKey(.delete, modifierFlags: .command)
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the items are gone
         XCTAssertEqual(app.yippyTableViewItems.count, 2)
@@ -336,14 +357,14 @@ class YippyUITests: XCTestCase {
         
         // Delete first item
         app.getYippyTableViewCell(at: 0).click()
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the item is gone
         XCTAssertEqual(app.yippyTableViewItems.count, 1)
         XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "1")
         
         // Delete final item
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check all items gone
         XCTAssertEqual(app.yippyTableViewItems.count, 0)
