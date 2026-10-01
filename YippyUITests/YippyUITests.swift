@@ -41,6 +41,13 @@ class YippyUITests: XCTestCase {
         XCTAssertTrue(app.yippyWindow.waitForExistence(timeout: 2))
     }
     
+    /// Search results arrive asynchronously, so wait for the table to settle.
+    func waitForItemCount(_ count: Int) {
+        let predicate = NSPredicate(format: "count == %d", count)
+        let e = expectation(for: predicate, evaluatedWith: app.yippyTableViewItems)
+        wait(for: [e], timeout: 3)
+    }
+    
     func assertCmdV() {
         // The paste is synthesized asynchronously once Yippy is no longer active, so poll for it.
         var keyPress = KeyPressMock.handleKeyPress()
@@ -371,6 +378,66 @@ class YippyUITests: XCTestCase {
         
         // Check pasteboard is empty
         XCTAssertTrue(NSPasteboard.general.types?.isEmpty ?? true)
+    }
+    
+    func testShortcutBeyondHistoryDoesNothing() {
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory, 4 items
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        XCTAssertLessThan(count, 9)
+        
+        // ⌘9 used to crash Yippy when there were fewer than 10 items
+        app.typeKey("9", modifierFlags: .command)
+        
+        // Still running, window still open, nothing pasted or removed
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertTrue(app.yippyWindow.isDisplayed)
+        XCTAssertEqual(app.yippyTableViewItems.count, count)
+    }
+    
+    func testDeleteFromSearchResults() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window and search for "3"
+        app.pressHotKey()
+        let allItems = (0..<app.yippyTableViewItems.count).map({ app.getYippyTableViewItemString(at: $0) })
+        XCTAssertTrue(allItems.contains("3"))
+        app.typeKey("\\", modifierFlags: .command)
+        app.typeText("3")
+        waitForItemCount(1)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        
+        // Delete the only result, which used to delete the first item in the whole history instead
+        app.getYippyTableViewCell(at: 0).click()
+        app.typeKey(.delete, modifierFlags: .control)
+        waitForItemCount(0)
+        
+        // Clear the search: only "3" is gone
+        app.typeKey("\\", modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: [])
+        waitForItemCount(allItems.count - 1)
+        let remaining = (0..<app.yippyTableViewItems.count).map({ app.getYippyTableViewItemString(at: $0) })
+        XCTAssertEqual(remaining, allItems.filter({ $0 != "3" }))
     }
     
     func testTypes() {
