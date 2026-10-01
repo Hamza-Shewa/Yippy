@@ -37,11 +37,20 @@ First install <a href="https://github.com/andreyvit/create-dmg" target="_blank">
 
 You will find the installer disk image `X.dmg` in the same folder.
 
+### Automatic updates
+Yippy uses [Sparkle](https://sparkle-project.org) for updates. It stays switched off (no updater, no "Check for Updates..." menu item) until `SUFeedURL` and `SUPublicEDKey` in `Yippy/Supporting Files/Info.plist` are filled in. To turn it on:
+
+1. Build the project once so Swift Package Manager fetches Sparkle, then find its tools under `~/Library/Developer/Xcode/DerivedData/Yippy-*/SourcePackages/artifacts/sparkle/Sparkle/bin`.
+2. Run `./generate_keys` once. It stores the EdDSA private key in your login Keychain and prints the public key. Put the public key in `SUPublicEDKey`. Keep the private key safe; every future update must be signed with it.
+3. Choose where the appcast will live (an `https` URL, e.g. `https://yippy.mattdavo.com/appcast.xml`) and put it in `SUFeedURL`.
+4. For each release: archive and notarize Yippy as usual, put the `.dmg` (or a `.zip` of the app) in a folder with the previous releases, and run `./generate_appcast <folder>`. It signs the archives and writes `appcast.xml`. Upload the archives and `appcast.xml` to the URLs the appcast points at.
+5. Bump `CFBundleVersion` (`CURRENT_PROJECT_VERSION`) for every release; Sparkle compares it to decide what's newer.
+
 ### TODO
 - [ ] Support more types of pasteboard items
 - [ ] Allow setting preferences for keyboard shortcuts
     - [x] Customize toggle hotkey
-- [ ] Automatic updates (maybe use Sparkle?)
+- [ ] Automatic updates (Sparkle is integrated; needs the appcast URL and signing key, see above)
 - [ ] Create a bug reporter, if places in code are reached that should not be possible create a unique error and a prompt to report the bug.
 - [ ] Don’t let any of the app be used until access is granted
 - [x] Toggle for attributed text
