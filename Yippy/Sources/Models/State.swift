@@ -34,6 +34,9 @@ class State {
     
     var pastesRichText: BehaviorRelay<Bool>
     
+    /// Bundle ids of apps whose copies are not saved to the history.
+    var ignoredAppBundleIds: BehaviorRelay<[String]>
+    
     var disposeBag: DisposeBag
     
     // History
@@ -53,6 +56,7 @@ class State {
         self.launchAtLogin = BehaviorRelay<Bool>(value: LoginServiceKit.isExistLoginItems())
         self.showsRichText = BehaviorRelay<Bool>(value: settings.showsRichText)
         self.pastesRichText = BehaviorRelay<Bool>(value: settings.pastesRichText)
+        self.ignoredAppBundleIds = BehaviorRelay<[String]>(value: settings.ignoredAppBundleIds)
         self.currentScreen = BehaviorRelay<NSScreen>(value: Self.getCurrentScreen(forMouseLocation: NSEvent.mouseLocation))
         self.disposeBag = disposeBag
         
@@ -69,6 +73,7 @@ class State {
         self.pasteboardMonitor = PasteboardMonitor(pasteboard: NSPasteboard.general, changeCount: settings.pasteboardChangeCount, delegate: self.history)
         
         Self.monitorPastesRichText(state: self)
+        Self.monitorIgnoredApps(state: self)
         Self.monitorMousePosition(state: self)
     }
     
@@ -80,11 +85,18 @@ class State {
         settings.bindMaxHistoryTo(state: state.history.maxItems).disposed(by: disposeBag)
         settings.bindShowsRichTextTo(state: state.showsRichText.asObservable()).disposed(by: disposeBag)
         settings.bindPastesRichTextTo(state: state.pastesRichText.asObservable()).disposed(by: disposeBag)
+        settings.bindIgnoredAppBundleIdsTo(state: state.ignoredAppBundleIds.asObservable()).disposed(by: disposeBag)
     }
     
     static func monitorPastesRichText(state: State) {
         state.pastesRichText.distinctUntilChanged().subscribe(onNext: {
             HistoryItem.pastesRichText = $0
+        }).disposed(by: state.disposeBag)
+    }
+    
+    static func monitorIgnoredApps(state: State) {
+        state.ignoredAppBundleIds.subscribe(onNext: {
+            state.history.ignoredBundleIds = Set($0)
         }).disposed(by: state.disposeBag)
     }
     

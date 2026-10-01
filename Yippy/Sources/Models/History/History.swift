@@ -60,7 +60,8 @@ class History {
     typealias SubscribeHandler = ([HistoryItem], Change) -> Void
     private var subscribers = [SubscribeHandler]()
     
-    private let bundleIdDenylist = [String]()
+    /// Copies made while one of these apps is frontmost are not saved.
+    var ignoredBundleIds = Set<String>()
     /// If a pasteboard item's types contains any of these, it will not be saved.
     private let pasteboardTypeDenylist: Set = [
         "org.nspasteboard.TransientType",
@@ -156,6 +157,12 @@ extension History: PasteboardMonitorDelegate {
     func pasteboardDidChange(_ pasteboard: NSPasteboard, originBundleId: String?) {
         // Check if we made this pasteboard change, if so, ignore
         if pasteboard.changeCount == lastRecordedChangeCount {
+            return
+        }
+        
+        // Skip copies from ignored apps, but still record the change so it isn't picked up later
+        if let originBundleId = originBundleId, ignoredBundleIds.contains(originBundleId) {
+            recordPasteboardChange(withCount: pasteboard.changeCount)
             return
         }
         
