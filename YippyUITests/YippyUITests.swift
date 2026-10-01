@@ -26,8 +26,36 @@ class YippyUITests: XCTestCase {
         app.launchEnvironment["SRCROOT"] = ProcessInfo.processInfo.environment["SRCROOT"]
     }
     
+    /// Opens the panel with the toggle hot key while another app is frontmost.
+    ///
+    /// Yippy only synthesizes ⌘V once it is no longer the active app, and on close it re-activates whichever app was frontmost when the panel opened. `app.typeKey` activates Yippy first, so send the hot key to Finder instead.
+    func pressHotKeyFromOtherApp() {
+        let finder = XCUIApplication(bundleIdentifier: "com.apple.finder")
+        finder.activate()
+        finder.typeKey("v", modifierFlags: [.command, .shift])
+        // Right after launch the hot key is occasionally missed, so try once more
+        if !app.yippyWindow.waitForExistence(timeout: 2) {
+            finder.activate()
+            finder.typeKey("v", modifierFlags: [.command, .shift])
+        }
+        XCTAssertTrue(app.yippyWindow.waitForExistence(timeout: 2))
+    }
+    
+    /// Search results arrive asynchronously, so wait for the table to settle.
+    func waitForItemCount(_ count: Int) {
+        let predicate = NSPredicate(format: "count == %d", count)
+        let e = expectation(for: predicate, evaluatedWith: app.yippyTableViewItems)
+        wait(for: [e], timeout: 3)
+    }
+    
     func assertCmdV() {
-        let keyPress = KeyPressMock.handleKeyPress()
+        // The paste is synthesized asynchronously once Yippy is no longer active, so poll for it.
+        var keyPress = KeyPressMock.handleKeyPress()
+        let deadline = Date().addingTimeInterval(3)
+        while keyPress == nil && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            keyPress = KeyPressMock.handleKeyPress()
+        }
         // Assert there was a key press
         XCTAssertNotNil(keyPress)
         // Assert it was a c + cmd key press
@@ -212,7 +240,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         app.typeKey(.return)
         
         // Assert item was pasted
@@ -237,7 +265,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         // Select index 2
         app.getYippyTableViewCell(at: 2).click()
         app.typeKey(.return)
@@ -275,7 +303,7 @@ class YippyUITests: XCTestCase {
         app.launch()
         
         // Open Yippy window
-        app.pressHotKey()
+        pressHotKeyFromOtherApp()
         // Use short cut for item index 2 (⌘ + 2)
         app.typeKey("2", modifierFlags: .command)
         
@@ -316,7 +344,7 @@ class YippyUITests: XCTestCase {
         // Select index 2
         app.getYippyTableViewCell(at: 2).click()
         // Delete
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the item is gone
         XCTAssertEqual(app.yippyTableViewItems.count, 4)
@@ -326,8 +354,8 @@ class YippyUITests: XCTestCase {
         XCTAssertEqual(app.getYippyTableViewItemString(at: 3), "4")
         
         // Delete again
-        app.typeKey(.delete, modifierFlags: .command)
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the items are gone
         XCTAssertEqual(app.yippyTableViewItems.count, 2)
@@ -336,20 +364,154 @@ class YippyUITests: XCTestCase {
         
         // Delete first item
         app.getYippyTableViewCell(at: 0).click()
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check that the item is gone
         XCTAssertEqual(app.yippyTableViewItems.count, 1)
         XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "1")
         
         // Delete final item
-        app.typeKey(.delete, modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: .control)
         
         // Check all items gone
         XCTAssertEqual(app.yippyTableViewItems.count, 0)
         
         // Check pasteboard is empty
         XCTAssertTrue(NSPasteboard.general.types?.isEmpty ?? true)
+    }
+    
+    func testShortcutBeyondHistoryDoesNothing() {
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory, 4 items
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        XCTAssertLessThan(count, 9)
+        
+        // ⌘9 used to crash Yippy when there were fewer than 10 items
+        app.typeKey("9", modifierFlags: .command)
+        
+        // Still running, window still open, nothing pasted or removed
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertTrue(app.yippyWindow.isDisplayed)
+        XCTAssertEqual(app.yippyTableViewItems.count, count)
+    }
+    
+    func testDeleteFromSearchResults() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window and search for "3"
+        app.pressHotKey()
+        let allItems = (0..<app.yippyTableViewItems.count).map({ app.getYippyTableViewItemString(at: $0) })
+        XCTAssertTrue(allItems.contains("3"))
+        app.typeKey("\\", modifierFlags: .command)
+        app.typeText("3")
+        waitForItemCount(1)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        
+        // Delete the only result, which used to delete the first item in the whole history instead
+        app.getYippyTableViewCell(at: 0).click()
+        app.typeKey(.delete, modifierFlags: .control)
+        waitForItemCount(0)
+        
+        // Clear the search: only "3" is gone
+        app.typeKey("\\", modifierFlags: .command)
+        app.typeKey(.delete, modifierFlags: [])
+        waitForItemCount(allItems.count - 1)
+        let remaining = (0..<app.yippyTableViewItems.count).map({ app.getYippyTableViewItemString(at: $0) })
+        XCTAssertEqual(remaining, allItems.filter({ $0 != "3" }))
+    }
+    
+    func testFavourites() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory, which has no favourites
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window and favourite "2" and "3"
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        app.getYippyTableViewCell(at: 2).click()
+        app.typeKey("f", modifierFlags: .control)
+        app.getYippyTableViewCell(at: 3).click()
+        app.typeKey("f", modifierFlags: .control)
+        XCTAssertTrue(app.yippyWindow.checkBoxes["Favourites (2)"].waitForExistence(timeout: 2))
+        
+        // The favourites tab shows them, newest first
+        app.yippyWindow.checkBoxes["Favourites (2)"].click()
+        waitForItemCount(2)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 1), "2")
+        let screenshot = XCTAttachment(screenshot: app.yippyWindow.screenshot())
+        screenshot.name = "Favourites"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        
+        // Deleting a favourite doesn't touch the clipboard history
+        app.getYippyTableViewCell(at: 0).click()
+        app.typeKey(.delete, modifierFlags: .control)
+        waitForItemCount(1)
+        XCTAssertTrue(app.yippyWindow.checkBoxes["Favourites (1)"].exists)
+        
+        app.yippyWindow.checkBoxes["Clipboard"].click()
+        waitForItemCount(count)
+    }
+    
+    func testCopyingExistingItemMovesItToTop() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 3), "3")
+        app.pressHotKey()
+        
+        // Copy "3" again
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("3", forType: .string)
+        
+        // It moved to the top rather than being added again
+        app.pressHotKey()
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        XCTAssertEqual(app.yippyTableViewItems.count, count)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 1), "My latest copy")
     }
     
     func testTypes() {

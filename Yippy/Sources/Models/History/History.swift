@@ -57,10 +57,14 @@ class History {
         case itemLimitDecreased(deletedItems: [HistoryItem])
     }
     
+    /// Cheap fingerprints of item contents by id, for finding duplicates. Filled lazily by `fingerprint(of:)`.
+    private var fingerprints = [UUID: Int]()
+    
     typealias SubscribeHandler = ([HistoryItem], Change) -> Void
     private var subscribers = [SubscribeHandler]()
     
-    private let bundleIdDenylist = [String]()
+    /// Copies made while one of these apps is frontmost are not saved.
+    var ignoredBundleIds = Set<String>()
     /// If a pasteboard item's types contains any of these, it will not be saved.
     private let pasteboardTypeDenylist: Set = [
         "org.nspasteboard.TransientType",
@@ -75,6 +79,8 @@ class History {
     /// These pasteboard item types will not be saved.
     private let pasteboardTypeIgnoreList = Set([
         "dyn.ah62d4rv4gu8zg55zsmv0nvperf4g86varvu0635zqfx0nkdsqf00nkduqf31k3pcr7u1e3basv61a3k",
+        // Yippy's own item id, written alongside every item it pastes (e.g. from favourites)
+        HistoryItem.historyItemIdType.rawValue,
     ].map({NSPasteboard.PasteboardType(rawValue: $0)}));
     
     init(historyFM: HistoryFileManager = .default, cache: HistoryCache, items: [HistoryItem], maxItems: Int = Constants.system.maxHistoryItems) {
@@ -111,6 +117,7 @@ class History {
     
     func deleteItem(at i: Int) {
         let removed = _items.remove(at: i)
+        fingerprints.removeValue(forKey: removed.fsId)
         subscribers.forEach({$0(_items, Change.delete(deletedItem: removed))})
         historyFM.deleteItem(newHistory: _items, deleted: removed)
     }
@@ -118,6 +125,7 @@ class History {
     func clear() {
         _items.forEach({$0.stopCaching()})
         _items = []
+        fingerprints = [:]
         subscribers.forEach({$0(_items, Change.clear)})
         historyFM.clearHistory()
     }
@@ -147,7 +155,58 @@ class History {
         historyFM.reduce(oldHistory: _items, toSize: maxItems)
         let deletedItems = Array(_items.suffix(_items.count - maxItems))
         _items = Array(_items.prefix(maxItems))
+        deletedItems.forEach({ fingerprints.removeValue(forKey: $0.fsId) })
         subscribers.forEach({$0(_items, Change.itemLimitDecreased(deletedItems: deletedItems))})
+    }
+}
+
+// MARK: - Duplicates
+extension History {
+    
+    /// Hashes the types and data. `Data`'s own hash only looks at a prefix of the bytes, so equal fingerprints still need a full comparison.
+    static func fingerprint(of data: [NSPasteboard.PasteboardType: Data]) -> Int {
+        var hasher = Hasher()
+        for type in data.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            hasher.combine(type)
+            hasher.combine(data[type]!.count)
+            hasher.combine(data[type]!)
+        }
+        return hasher.finalize()
+    }
+    
+    /// The item's fingerprint, reading its data the first time. Nil if some of its data can't be read.
+    private func fingerprint(of item: HistoryItem) -> Int? {
+        if let f = fingerprints[item.fsId] {
+            return f
+        }
+        guard let data = allData(of: item) else {
+            return nil
+        }
+        let f = Self.fingerprint(of: data)
+        fingerprints[item.fsId] = f
+        return f
+    }
+    
+    private func allData(of item: HistoryItem) -> [NSPasteboard.PasteboardType: Data]? {
+        var data = [NSPasteboard.PasteboardType: Data]()
+        for type in item.types {
+            guard let d = item.data(forType: type) else {
+                return nil
+            }
+            data[type] = d
+        }
+        return data
+    }
+    
+    /// Index of the item with exactly these types and data, if there is one.
+    func indexOfItem(withData data: [NSPasteboard.PasteboardType: Data]) -> Int? {
+        let types = Set(data.keys)
+        let f = Self.fingerprint(of: data)
+        return _items.firstIndex(where: {
+            Set($0.types) == types
+                && fingerprint(of: $0) == f
+                && allData(of: $0) == data
+        })
     }
 }
 
@@ -156,6 +215,12 @@ extension History: PasteboardMonitorDelegate {
     func pasteboardDidChange(_ pasteboard: NSPasteboard, originBundleId: String?) {
         // Check if we made this pasteboard change, if so, ignore
         if pasteboard.changeCount == lastRecordedChangeCount {
+            return
+        }
+        
+        // Skip copies from ignored apps, but still record the change so it isn't picked up later
+        if let originBundleId = originBundleId, ignoredBundleIds.contains(originBundleId) {
+            recordPasteboardChange(withCount: pasteboard.changeCount)
             return
         }
         
@@ -173,18 +238,25 @@ extension History: PasteboardMonitorDelegate {
                 var data = [NSPasteboard.PasteboardType: Data]()
                 for type in filteredTypes {
                     if let d = item.data(forType: type) {
-                        let firstData = self._items.first?.data(forType: type)
-                        let isNewData = firstData == nil || firstData?.hashValue != d.hashValue
-                        if isNewData {
-                            data[type] = d
-                        }
+                        data[type] = d
                     }
                     else {
                         print("Warning: new pasteboard data nil for type '\(type.rawValue)'")
                     }
                 }
-                if !data.isEmpty {
+                if data.isEmpty {
+                    continue
+                }
+                
+                // Copying something already in the history brings it back to the top instead of adding it again
+                if let i = indexOfItem(withData: data) {
+                    if i != 0 {
+                        moveItem(at: i, to: 0)
+                    }
+                }
+                else {
                     let historyItem = HistoryItem(unsavedData: data, cache: cache)
+                    fingerprints[historyItem.fsId] = Self.fingerprint(of: data)
                     insertItem(historyItem, at: 0)
                 }
             }

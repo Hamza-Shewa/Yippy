@@ -13,8 +13,23 @@ import RxRelay
 import RxCocoa
 
 struct Results {
+    /// The history (clipboard or favourites) the items come from.
+    let history: History
     let items: [HistoryItem]
     let isSearchResult: Bool
+}
+
+/// The lists shown by the buttons above the history panel, in button order.
+enum ItemGroup: Int {
+    case clipboard = 0
+    case favourites = 1
+    
+    var history: History {
+        switch self {
+        case .clipboard: return State.main.history
+        case .favourites: return State.main.favourites
+        }
+    }
 }
 
 class YippyViewController: NSViewController {
@@ -28,17 +43,18 @@ class YippyViewController: NSViewController {
     
     var yippyHistory = YippyHistory(history: State.main.history, items: [])
     
-    var searchEngine = SearchEngine(data: [])
+    let searchEngine = SearchEngine()
     
     let disposeBag = DisposeBag()
     
     var isPreviewShowing = false
     
-    var itemGroups = BehaviorRelay<[String]>(value: ["Clipboard", "Favourites", "Clipboard", "Favourites", "Clipboard", "Favourites"])
+    var itemGroups = BehaviorRelay<[String]>(value: ["Clipboard", "Favourites"])
+    let selectedGroup = BehaviorRelay<ItemGroup>(value: .clipboard)
     
     var isRichText = Settings.main.showsRichText
     
-    let results = BehaviorRelay(value: Results(items: [], isSearchResult: false))
+    let results = BehaviorRelay(value: Results(history: State.main.history, items: [], isSearchResult: false))
     let selected = BehaviorRelay<Int?>(value: nil)
     
     override func viewDidLoad() {
@@ -47,13 +63,13 @@ class YippyViewController: NSViewController {
         yippyHistoryView.yippyDelegate = self
         
         State.main.history.subscribe(onNext: onHistoryChange)
+        State.main.favourites.subscribe(onNext: onFavouritesChange)
         
         State.main.showsRichText.distinctUntilChanged().subscribe(onNext: onShowsRichText).disposed(by: disposeBag)
         
+        itemGroupScrollView.delegate = self
         itemGroupScrollView.bind(toData: itemGroups.asObservable()).disposed(by: disposeBag)
-        itemGroupScrollView.bind(toSelected: BehaviorRelay<Int>(value: 0).asObservable()).disposed(by: disposeBag)
-        // TODO: Remove this when implemented
-        itemGroupScrollView.constraint(withIdentifier: "height")?.constant = 0
+        itemGroupScrollView.bind(toSelected: selectedGroup.map({ $0.rawValue })).disposed(by: disposeBag)
         
         Observable.combineLatest(
             results,
@@ -86,6 +102,7 @@ class YippyViewController: NSViewController {
         YippyHotKeys.ctrlDelete.onDown(deleteSelected)
         YippyHotKeys.ctrlSpace.onDown(togglePreview)
         YippyHotKeys.cmdBackslash.onDown(focusSearchBar)
+        YippyHotKeys.ctrlF.onDown(toggleFavourite)
         
         // Paste hot keys
         YippyHotKeys.cmd0.onDown { self.shortcutPressed(key: 0) }
@@ -99,28 +116,9 @@ class YippyViewController: NSViewController {
         YippyHotKeys.cmd8.onDown { self.shortcutPressed(key: 8) }
         YippyHotKeys.cmd9.onDown { self.shortcutPressed(key: 9) }
         
-        bindHotKeyToYippyWindow(YippyHotKeys.downArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.upArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.return, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.escape, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageDown, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.pageUp, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdLeftArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdRightArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdDownArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlAltCmdUpArrow, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd0, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd1, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd2, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd3, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd4, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd5, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd6, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd7, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd8, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.cmd9, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlDelete, disposeBag: disposeBag)
-        bindHotKeyToYippyWindow(YippyHotKeys.ctrlSpace, disposeBag: disposeBag)
+        for hotKey in YippyHotKeys.inPanel {
+            bindHotKeyToYippyWindow(hotKey, disposeBag: disposeBag)
+        }
         
         searchBar.resignFirstResponder()
     }
@@ -142,12 +140,14 @@ class YippyViewController: NSViewController {
     }
     
     func onHistoryChange(_ history: [HistoryItem], change: History.Change) {
-        updateSearchEngine(items: history)
+        guard selectedGroup.value == .clipboard else {
+            return
+        }
         if !searchBar.stringValue.isEmpty {
             runSearch()
         }
         else {
-            results.accept(Results(items: history, isSearchResult: false))
+            results.accept(Results(history: State.main.history, items: history, isSearchResult: false))
             switch change {
             case .insert(let i):
                 if i == 0 {
@@ -159,12 +159,30 @@ class YippyViewController: NSViewController {
         }
     }
     
-    func updateSearchEngine(items: [HistoryItem]) {
-        self.searchEngine = SearchEngine(data: items.compactMap({$0.getPlainString()}))
+    func onFavouritesChange(_ favourites: [HistoryItem], change: History.Change) {
+        // The button title shows how many there are
+        itemGroups.accept(["Clipboard", favourites.isEmpty ? "Favourites" : "Favourites (\(favourites.count))"])
+        // Rebuilding the buttons clears their state
+        selectedGroup.accept(selectedGroup.value)
+        
+        if selectedGroup.value == .favourites {
+            refreshResults()
+        }
+    }
+    
+    /// Shows the selected group's items, filtered by the search if there is one.
+    func refreshResults() {
+        if !searchBar.stringValue.isEmpty {
+            runSearch()
+        }
+        else {
+            let history = selectedGroup.value.history
+            results.accept(Results(history: history, items: history.items, isSearchResult: false))
+        }
     }
     
     func onAllChange(_ results: Results, _ selected: (Int?, Int?)) {
-        if results.items != self.yippyHistory.items {
+        if results.items != self.yippyHistory.items || results.history !== self.yippyHistory.history {
                 if results.isSearchResult {
                     self.itemCountLabel.stringValue = "\(results.items.count) matches"
                 }
@@ -172,7 +190,8 @@ class YippyViewController: NSViewController {
                     self.itemCountLabel.stringValue = "\(results.items.count) items"
                 }
                 
-                self.yippyHistory = YippyHistory(history: State.main.history, items: results.items)
+                // Favourites keep their order when pasted
+                self.yippyHistory = YippyHistory(history: results.history, items: results.items, movesPastedItemToTop: results.history === State.main.history)
                 self.yippyHistoryView.reloadData(self.yippyHistory.items, isRichText: self.isRichText)
             }
         
@@ -235,6 +254,10 @@ class YippyViewController: NSViewController {
     }
     
     func shortcutPressed(key: Int) {
+        // ⌘0-9 are registered whether or not there are that many items.
+        guard yippyHistory.items.indices.contains(key) else {
+            return
+        }
         paste(selected: key)
     }
     
@@ -250,24 +273,44 @@ class YippyViewController: NSViewController {
         }
     }
     
+    /// Adds the selected clipboard item to the favourites, or removes it if it's already there. In the favourites, removes the selected item.
+    func toggleFavourite() {
+        guard let row = yippyHistoryView.selected, yippyHistory.items.indices.contains(row) else {
+            return
+        }
+        if yippyHistory.history === State.main.favourites {
+            deleteSelected()
+        }
+        else {
+            State.main.favourites.toggleFavourite(yippyHistory.items[row])
+        }
+    }
+    
+    func selectGroup(_ group: ItemGroup) {
+        guard group != selectedGroup.value else {
+            return
+        }
+        selectedGroup.accept(group)
+        refreshResults()
+        resetSelected()
+    }
+    
     func focusSearchBar() {
         NSApp.activate(ignoringOtherApps: true)
         self.searchBar.becomeFirstResponder()
     }
     
     func runSearch() {
-        searchEngine.search(query: searchBar.stringValue, completion: { result in
-            if (result.query.query.isEmpty) {
-                self.results.accept(Results(items: State.main.history.items, isSearchResult: false))
-                return
-            }
-            
-            var filteredData = [HistoryItem]()
-            for i in result.results {
-                filteredData.append(State.main.history.items[i])
-            }
-            
-            self.results.accept(Results(items: filteredData, isSearchResult: true))
+        let query = searchBar.stringValue
+        let history = selectedGroup.value.history
+        if query.isEmpty {
+            searchEngine.cancel()
+            results.accept(Results(history: history, items: history.items, isSearchResult: false))
+            return
+        }
+        
+        searchEngine.search(query: query, in: history.items, completion: { matches in
+            self.results.accept(Results(history: history, items: matches, isSearchResult: true))
         })
     }
     
@@ -315,5 +358,13 @@ extension YippyViewController: YippyTableViewDelegate {
     func yippyTableView(_ yippyTableView: YippyTableView, didMoveItem from: Int, to: Int) {
         yippyHistory.move(from: from, to: to)
         selected.accept(to)
+    }
+}
+
+extension YippyViewController: HorizontalButtonsViewDelegate {
+    func horizontalButtonsView(_ horizontalButtonsView: HorizontalButtonsView, didClickButtonAt i: Int) {
+        if let group = ItemGroup(rawValue: i) {
+            selectGroup(group)
+        }
     }
 }

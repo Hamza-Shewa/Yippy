@@ -22,6 +22,7 @@ class Accessibility {
         static let quitButton = "quitButton"
         static let helpButton = "helpButton"
         static let aboutButton = "aboutButton"
+        static let checkForUpdatesButton = "checkForUpdatesButton"
         static let welcomeAllowAccessButton = "welcomeAllowAccessButton"
         
         static let positionButton = "positionButton"
@@ -45,5 +46,8 @@ class Accessibility {
         static let yippyTiffCellView = "YippyTiffCellView"
         static let yippyFileIconCellView = "YippyFileIconCellView"
         static let yippyFileThumbnailCellView = "YippyFileThumbnailCellView"
+        
+        static let ignoredAppsTableView = "ignoredAppsTableView"
+        static let ignoredAppsAddRemoveControl = "ignoredAppsAddRemoveControl"
     }
 }

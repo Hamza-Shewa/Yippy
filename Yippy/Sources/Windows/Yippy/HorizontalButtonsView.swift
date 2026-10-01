@@ -14,6 +14,8 @@ import RxRelay
 class HorizontalButtonsView: NSScrollView {
     
     private var buttons = [NSButton]()
+    
+    weak var delegate: HorizontalButtonsViewDelegate?
     private var buttonsDocumentView = NSView(frame: .zero)
     
     var leftPadding: CGFloat = 20
@@ -94,6 +96,7 @@ class HorizontalButtonsView: NSScrollView {
     
     @objc private func buttonHandler(_ sender: NSButton) {
         updateSelected(sender.tag)
+        delegate?.horizontalButtonsView(self, didClickButtonAt: sender.tag)
     }
     
     override func setFrameSize(_ newSize: NSSize) {
@@ -103,7 +106,7 @@ class HorizontalButtonsView: NSScrollView {
     }
 }
 
-protocol HorizontalButtonsViewDelegate {
+protocol HorizontalButtonsViewDelegate: AnyObject {
     
     func horizontalButtonsView(_ horizontalButtonsView: HorizontalButtonsView, didClickButtonAt i: Int)
     

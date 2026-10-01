@@ -16,19 +16,46 @@ class YippyHistory {
     
     let pasteboard: NSPasteboard
     
-    init(history: History, items: [HistoryItem]) {
+    /// Whether pasting an item moves it to the top. True for the clipboard history, false for favourites, which keep their order.
+    let movesPastedItemToTop: Bool
+    
+    init(history: History, items: [HistoryItem], pasteboard: NSPasteboard = .general, movesPastedItemToTop: Bool = true) {
         self.history = history
         self.items = items
-        self.pasteboard = NSPasteboard.general
+        self.pasteboard = pasteboard
+        self.movesPastedItemToTop = movesPastedItemToTop
+    }
+    
+    /// Finds where the item shown at `row` currently sits in the full history.
+    ///
+    /// `items` may be a filtered search result, so a row is not a history index.
+    /// Looks the item up by id rather than trusting a stored index, because the history can change between
+    /// building `items` and acting on it.
+    func historyIndex(ofRow row: Int) -> Int? {
+        guard items.indices.contains(row) else {
+            return nil
+        }
+        let id = items[row].fsId
+        return history.items.firstIndex(where: { $0.fsId == id })
     }
     
     func paste(selected: Int) {
-        // Internally action the pasteboard change
-        // Our pasteboard monitor will detect the change
-        // But our `History` will know that it has already been consumed
-        history.moveItem(at: selected, to: 0)
-        let newChangeCount = pasteboard.clearContents()
-        history.recordPasteboardChange(withCount: newChangeCount)
+        guard let index = historyIndex(ofRow: selected) else {
+            return
+        }
+        
+        if movesPastedItemToTop {
+            // Internally action the pasteboard change
+            // Our pasteboard monitor will detect the change
+            // But our `History` will know that it has already been consumed
+            history.moveItem(at: index, to: 0)
+            let newChangeCount = pasteboard.clearContents()
+            history.recordPasteboardChange(withCount: newChangeCount)
+        }
+        else {
+            // Leave the change for the clipboard history to pick up like any other copy
+            pasteboard.clearContents()
+        }
         
         // Write object
         pasteboard.writeObjects([items[selected]])
@@ -56,8 +83,12 @@ class YippyHistory {
     
     /// Returns the next item to select
     func delete(selected: Int) -> Int? {
-        history.deleteItem(at: selected)
-        if selected == 0 {
+        guard let index = historyIndex(ofRow: selected) else {
+            return nil
+        }
+        
+        history.deleteItem(at: index)
+        if index == 0 {
             // If we want to remove this, then we may have to change the `HistoryItem` writingOptions() to not `.promised`, because if something is pasted from history, then deleted, it can no longer satisfy the promise.
             pasteboard.clearContents()
         }
@@ -80,9 +111,14 @@ class YippyHistory {
     }
     
     func move(from: Int, to: Int) {
-        history.moveItem(at: from, to: to)
+        // Rows keep their relative history order, so landing at row `to` means taking the history position of the item that was there.
+        guard let fromIndex = historyIndex(ofRow: from), let toIndex = historyIndex(ofRow: to) else {
+            return
+        }
         
-        if to == 0 {
+        history.moveItem(at: fromIndex, to: toIndex)
+        
+        if toIndex == 0 {
             let newChangeCount = pasteboard.clearContents()
             history.recordPasteboardChange(withCount: newChangeCount)
             

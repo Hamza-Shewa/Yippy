@@ -49,11 +49,19 @@ class Controller {
     
     // MARK: - Constructor
     
+    let updater = Updater()
+    
     init(state: State, settings: Settings) {
         self.state = state
         // Setup status item
         self.statusItem = YippyStatusItem.create()
         self.statusItem.menu = Self.createMenu(settings: settings, state: state, target: self)
+        if updater.isEnabled {
+            let item = NSMenuItem(title: "Check for Updates...", action: #selector(Updater.checkForUpdates), keyEquivalent: "")
+            item.target = updater
+            item.setAccessibilityIdentifier(Accessibility.identifiers.checkForUpdatesButton)
+            self.statusItem.menu?.insertItem(item, at: 2)
+        }
         
         // Create yippy window controller
         self.yippyWindowController = Self.createYippyWindowController(state: state, disposeBag: state.disposeBag)

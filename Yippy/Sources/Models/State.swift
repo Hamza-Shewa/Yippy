@@ -34,11 +34,18 @@ class State {
     
     var pastesRichText: BehaviorRelay<Bool>
     
+    /// Bundle ids of apps whose copies are not saved to the history.
+    var ignoredAppBundleIds: BehaviorRelay<[String]>
+    
     var disposeBag: DisposeBag
     
     // History
     var historyCache: HistoryCache!
     var history: History!
+    
+    // Favourites, stored separately from the history (see `HistoryFileManager.favourites`)
+    var favouritesCache: HistoryCache!
+    var favourites: History!
     
     /// Monitors the pasteboard, here it can be controlled in the future if needed.
     var pasteboardMonitor: PasteboardMonitor!
@@ -53,6 +60,7 @@ class State {
         self.launchAtLogin = BehaviorRelay<Bool>(value: LoginServiceKit.isExistLoginItems())
         self.showsRichText = BehaviorRelay<Bool>(value: settings.showsRichText)
         self.pastesRichText = BehaviorRelay<Bool>(value: settings.pastesRichText)
+        self.ignoredAppBundleIds = BehaviorRelay<[String]>(value: settings.ignoredAppBundleIds)
         self.currentScreen = BehaviorRelay<NSScreen>(value: Self.getCurrentScreen(forMouseLocation: NSEvent.mouseLocation))
         self.disposeBag = disposeBag
         
@@ -62,6 +70,12 @@ class State {
         self.history.recordPasteboardChange(withCount: settings.pasteboardChangeCount)
         self.history.setMaxItems(settings.maxHistory)
         
+        // Setup favourites
+        try? HistoryFileManager.favourites.checkHistoryDirectory()
+        self.favouritesCache = HistoryCache(historyFM: .favourites)
+        self.favourites = History.load(historyFM: .favourites, cache: favouritesCache)
+        self.favourites.setMaxItems(Int.max)
+        
         // Bind settings to state
         Self.bind(settings: settings, toState: self, disposeBag: disposeBag)
         
@@ -69,6 +83,7 @@ class State {
         self.pasteboardMonitor = PasteboardMonitor(pasteboard: NSPasteboard.general, changeCount: settings.pasteboardChangeCount, delegate: self.history)
         
         Self.monitorPastesRichText(state: self)
+        Self.monitorIgnoredApps(state: self)
         Self.monitorMousePosition(state: self)
     }
     
@@ -80,11 +95,18 @@ class State {
         settings.bindMaxHistoryTo(state: state.history.maxItems).disposed(by: disposeBag)
         settings.bindShowsRichTextTo(state: state.showsRichText.asObservable()).disposed(by: disposeBag)
         settings.bindPastesRichTextTo(state: state.pastesRichText.asObservable()).disposed(by: disposeBag)
+        settings.bindIgnoredAppBundleIdsTo(state: state.ignoredAppBundleIds.asObservable()).disposed(by: disposeBag)
     }
     
     static func monitorPastesRichText(state: State) {
         state.pastesRichText.distinctUntilChanged().subscribe(onNext: {
             HistoryItem.pastesRichText = $0
+        }).disposed(by: state.disposeBag)
+    }
+    
+    static func monitorIgnoredApps(state: State) {
+        state.ignoredAppBundleIds.subscribe(onNext: {
+            state.history.ignoredBundleIds = Set($0)
         }).disposed(by: state.disposeBag)
     }
     
