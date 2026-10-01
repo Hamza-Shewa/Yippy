@@ -4,11 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Yippy is a macOS menu-bar clipboard manager (Swift 5, AppKit, RxSwift, CocoaPods; deployment target 10.13/10.14). It only builds and runs on macOS with Xcode. There is no linter or formatter configured.
+Yippy is a macOS menu-bar clipboard manager (Swift 5, AppKit, RxSwift, CocoaPods + Swift Package Manager; project deployment target 10.13/10.14). It only builds and runs on macOS with Xcode. There is no linter or formatter configured.
 
 ## Build, run, test
 
-Always open/build `Yippy.xcworkspace` (not the `.xcodeproj`). Dependencies come from two places: CocoaPods (`Default`, `LoginServiceKit` from a git URL, `RxSwift`/`RxCocoa`, plus `RxBlocking`/`RxTest` for tests) and Swift Package Manager (`HotKey`, from the `mattDavo/HotKey` fork, pinned in `Yippy.xcworkspace/xcshareddata/swiftpm/Package.resolved`). `Pods/` is committed, so `pod install` is only needed when the `Podfile` changes.
+Always open/build `Yippy.xcworkspace` (not the `.xcodeproj`). Dependencies come from two places:
+- CocoaPods: `Default`, `LoginServiceKit` (from a git URL), `RxSwift`/`RxCocoa`, plus `RxBlocking`/`RxTest` for tests.
+- Swift Package Manager: `HotKey` (the `mattDavo/HotKey` fork) and `Sparkle`, pinned in `Yippy.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
+
+`Pods/` is committed, so `pod install` is only needed when the `Podfile` changes. It also carries local patches (e.g. `Pods/LoginServiceKit` was edited to compile on Xcode 27), which a `pod install` would overwrite.
 
 There are three shared schemes, each with its own build configuration and bundle id:
 
@@ -27,41 +31,54 @@ xcodebuild test -workspace Yippy.xcworkspace -scheme "Yippy XCTest" -only-testin
 xcodebuild test -workspace Yippy.xcworkspace -scheme "Yippy XCTest" -only-testing:YippyTests/HistoryCacheTests/testDataWhenFMReturnsNil
 ```
 
-`YippyUITests` drives the real app via XCUITest and needs the test runner to have Accessibility permission. The scheme's launch environment sets `SRCROOT`, and the UI tests forward it to the app (see "UI-test hooks" below). `./create-installer.sh <AppName>` builds a `.dmg` from an `<AppName>.app` placed next to it and needs `create-dmg` installed.
+Xcode 27 rejects the project's 10.13/10.14 deployment target, and signing fails without the project team's certificate. The project settings are deliberately unchanged, so on a machine like that pass overrides on the command line:
+`-destination 'platform=macOS' MACOSX_DEPLOYMENT_TARGET=12.0 CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
 
-Because the app-support directory and `UserDefaults` are keyed by bundle id, Yippy, Yippy Beta and the XCTest build each have separate history and settings.
+`YippyUITests` drives the real app via XCUITest and needs the test runner to have Accessibility permission. The scheme's launch environment sets `SRCROOT`, and the UI tests forward it to the app (see "UI-test hooks" below). `create-installer.sh` builds the `.dmg` installer; its usage is in the README.
+
+Because the app-support directory and `UserDefaults` are keyed by bundle id, Yippy, Yippy Beta and the XCTest build each have separate history, favourites and settings.
 
 ## Architecture
 
 ### Singletons and wiring
-`AppDelegate` creates `Controller.main = Controller(state: State.main, settings: Settings.main)`. `Controller` owns the status item/menu and the window controllers (history panel, preview, and lazily the welcome/help/about/settings windows). Code reaches `State.main`, `Settings.main` and `Controller.main` globally instead of through injection; only the history/model layer takes injected dependencies (which is what the unit tests mock).
+`AppDelegate` creates `Controller.main = Controller(state: State.main, settings: Settings.main)`. `Controller` owns the status item/menu (including the `Updater`'s menu item) and the window controllers (history panel, preview, and lazily the welcome/help/about/settings windows). Code reaches `State.main`, `Settings.main` and `Controller.main` globally instead of through injection; only the history/model layer takes injected dependencies (which is what the unit tests mock).
 
-`State` is the hub: RxSwift `BehaviorRelay`s for UI state (`isHistoryPanelShown`, `panelPosition`, `currentScreen`, `previewHistoryItem`, `showsRichText`, `pastesRichText`) plus the `History`, `HistoryCache` and `PasteboardMonitor`. Windows and menu items subscribe to these relays, so e.g. toggling the panel is just `isHistoryPanelShown.accept(...)`. `State.bind` mirrors relay values back into `Settings.main` (a `Codable` struct persisted to `UserDefaults` through the `Default` pod), which is how settings persist: there are no explicit "save settings" calls for those fields. `Settings.main` reads and writes `UserDefaults` on every access.
+`State` is the hub: RxSwift `BehaviorRelay`s for UI state (`isHistoryPanelShown`, `panelPosition`, `currentScreen`, `previewHistoryItem`, `showsRichText`, `pastesRichText`, `ignoredAppBundleIds`) plus two `History` objects (the clipboard `history` and `favourites`, each with its own `HistoryCache`) and the `PasteboardMonitor`. Windows and menu items subscribe to these relays, so e.g. toggling the panel is just `isHistoryPanelShown.accept(...)`. `State.bind` mirrors relay values back into `Settings.main` (a `Codable` struct persisted to `UserDefaults` through the `Default` pod), which is how settings persist: there are no explicit "save settings" calls for those fields. `Settings.main` reads and writes `UserDefaults` on every access. `Settings` has a hand-written `init(from:)`; a new field must be read with `decodeIfPresent` and a default, otherwise settings saved by older versions fail to decode and everything resets.
 
 ### Clipboard capture → history → disk
-1. `PasteboardMonitor` polls `NSPasteboard.changeCount` every 50 ms and calls `History.pasteboardDidChange`.
-2. `History` drops items carrying denylisted types (password managers, `org.nspasteboard.ConcealedType`, etc.), skips types whose data matches the current top item, and otherwise inserts a `HistoryItem(unsavedData:)` at index 0.
+1. `PasteboardMonitor` polls `NSPasteboard.changeCount` every 50 ms, tracks the frontmost app, and calls `History.pasteboardDidChange(_:originBundleId:)`.
+2. `History` skips the change if `originBundleId` is in `ignoredBundleIds` (the Ignored Apps setting; the change count is still recorded). The origin is the frontmost app, so a background process writing to the clipboard is attributed to whatever is in front. It drops items carrying denylisted types (password managers, `org.nspasteboard.ConcealedType`, etc.) and ignores Yippy's own `historyItemId` type. A copy whose types and bytes exactly match an existing item moves that item to the top instead of adding a duplicate (`indexOfItem(withData:)`, using a lazily filled per-item fingerprint so it doesn't re-read everything); anything else becomes a `HistoryItem(unsavedData:)` inserted at index 0 with all its types.
 3. `History` mutates its in-memory array synchronously, notifies subscribers (a closure list via `History.subscribe` with a `History.Change` enum, not Rx), then calls `HistoryFileManager`, which does all disk work on one serial background queue.
-4. On disk: `~/Library/Application Support/<bundle id>/history/<item UUID>/<pasteboard type raw value>` (one file per type) plus `history/order.xml`, an array of UUID strings that defines item order. `HistoryFileManager.loadHistory` reconciles the folders against the order file and alerts on mismatches. Errors/warnings also go to `error.log`/`warning.log` in the same directory via `ErrorLogger`/`WarningLogger`.
+4. On disk: `~/Library/Application Support/<bundle id>/history/<item UUID>/<pasteboard type raw value>` (one file per type) plus `history/order.xml`, an array of UUID strings that defines item order. Favourites use the same layout under `favourites/`: `HistoryFileManager` takes the folder as a parameter and has two shared instances, `.default` and `.favourites`. `loadHistory` reconciles the folders against the order file and alerts on mismatches. Errors/warnings also go to `error.log`/`warning.log` in the same directory via `ErrorLogger`/`WarningLogger`.
 5. `HistoryItem` loads data lazily through `HistoryCache` (LRU, 100 MB). Items must be registered with the cache before `data(withId:forType:)` serves them from it; `unsavedData` holds the bytes until the file is written, then `startCaching()` drops them.
 
+### Favourites
+Favourites are a second `History` (`State.main.favourites`, no size limit). Each favourite holds its own copy of the data (`History.toggleFavourite`, in `History+Favourites.swift`), so clearing or trimming the clipboard history never removes one. In the panel, `YippyViewController` switches between the two lists through `ItemGroup` (the buttons above the table), and every `Results` value carries the `History` it came from. ⌃F adds/removes the selected item.
+
 ### Pasting
-`YippyHistory.paste` moves the item to the top, clears the pasteboard and immediately calls `history.recordPasteboardChange(withCount:)` so `History` ignores the change Yippy itself made. It then writes the item (`HistoryItem` is an `NSPasteboardWriting` using `.promised`, so data is only read when requested) and polls until Yippy is no longer the active app before synthesizing ⌘V with `Helper.pressCommandV()`. That needs the Accessibility permission, which is why the Welcome window exists. `YippyWindowController` restores the previously frontmost app when the panel closes.
+`YippyHistory` wraps whichever list the table is showing. `items` can be a filtered search result, so a table row is not a history index: every action goes through `historyIndex(ofRow:)`, which looks the item up by `fsId` in the full history. Don't pass a row straight to `History.deleteItem/moveItem`.
+
+`paste` moves the item to the top (clipboard only; favourites keep their order), clears the pasteboard and immediately calls `history.recordPasteboardChange(withCount:)` so `History` ignores the change Yippy itself made. It then writes the item (`HistoryItem` is an `NSPasteboardWriting` using `.promised`, so data is only read when requested) and polls until Yippy is no longer the active app before synthesizing ⌘V with `Helper.pressCommandV()`. That needs the Accessibility permission, which is why the Welcome window exists. `YippyWindowController` restores the previously frontmost app when the panel closes.
 
 ### Panel UI and key handling
-`Main.storyboard` instantiates `YippyWindowController` (an `NSPanel` subclass, `YippyWindow`). Its frame is driven by `combineLatest(panelPosition, currentScreen)` through `PanelPosition.getFrame`; `State` polls the mouse every 0.1 s to update `currentScreen`. `YippyViewController` combines `results` (full history or search results) and `selected` relays and renders them in `YippyTableView` in `onAllChange`.
+`Main.storyboard` instantiates `YippyWindowController` (an `NSPanel` subclass, `YippyWindow`). Its frame is driven by `combineLatest(panelPosition, currentScreen)` through `PanelPosition.getFrame`; `State` polls the mouse every 0.1 s to update `currentScreen`. `YippyViewController` combines `results` and `selected` relays and renders them in `YippyTableView` in `onAllChange`. The Ignored Apps settings tab (`IgnoredAppsSettingsViewController`) is built in code and added in `SettingsTabViewController`, not in the storyboard.
 
 Keyboard handling has two separate systems:
-- `YippyHotKey` wraps the `HotKey` package (system-wide hotkeys, with long-press repeat). The global toggle (default ⌘⇧V, stored in `Settings.toggleHotKey`) and the in-panel keys (arrows, Page Up/Down, Return, Esc, ⌘0–9 quick paste, ⌃Delete, ⌃Space preview, ⌘\ focus search, ⌃⌥⌘+arrows to move the panel) are all registered as system-wide hotkeys. Each in-panel key is paused whenever the panel is hidden by an explicit `bindHotKeyToYippyWindow(...)` call in `YippyViewController.viewDidLoad`, so a new in-panel shortcut needs its own binding or it will steal that key system-wide (⌘\ is currently not bound this way).
+- `YippyHotKey` wraps the `HotKey` package (system-wide hotkeys, with long-press repeat). The global toggle (default ⌘⇧V, stored in `Settings.toggleHotKey`) and the in-panel keys are all registered system-wide. The in-panel ones are listed in `YippyHotKeys.inPanel` and `YippyViewController` pauses all of them while the panel is hidden. A new in-panel shortcut must be added to that list, or it takes the key away from every other app.
 - `KeyPressMonitor` (`NSEvent` monitors) is used only by `HotKeySettingsViewController` to record a new toggle shortcut.
 
 ### Search
-`SearchEngine` runs a case-insensitive subsequence fuzzy match (`performSearch`) over each item's plain-text string and caches results per query. Hazard: `YippyViewController.updateSearchEngine` builds the index with `compactMap(getPlainString)`, but `runSearch` uses the returned indices directly into `State.main.history.items`, so the two drift apart if any item has no plain-text representation (e.g. image-only items).
+`SearchEngine` runs on a serial background queue: a case-insensitive subsequence match over each item's plain text, cached per item id (items without plain text never match). Each `search` or `cancel` bumps a generation counter, so a superseded search stops early and its results are never delivered; `completion` runs on the main queue with the matching `HistoryItem`s (not indices).
+
+### Automatic updates
+`Updater` wraps Sparkle's `SPUStandardUpdaterController`. It only starts, and `Controller` only adds the "Check for Updates..." menu item, when `Info.plist` has an `https` `SUFeedURL` and a non-empty `SUPublicEDKey`. Both ship empty, so updates are off until the appcast URL and signing key are supplied; the `XCTEST` build never starts it. The release steps are in the README ("Automatic updates").
 
 ### UI-test hooks (compiled into the app)
-Launching with `--uitesting` makes `AppDelegate` call `UITesting.setupUITestEnvironment`, which swaps `Helper.accessControlHelper` and `Helper.keyPressHelper` for mocks that exchange state with the test process through named pasteboards (`Yippy.UITesting.*`), and blanks `UserDefaults`. Extra launch args: `--Settings.testData=a` loads canned settings, and `--test-dir=<name>` replaces the app-support directory with a copy of `TestData/<name>` (it deletes the existing one, and needs `SRCROOT`). `Constants/Accessibility.swift` identifiers are compiled into both the app and `YippyUITests`, so changing one means both sides see it.
+Launching with `--uitesting` makes `AppDelegate` call `UITesting.setupUITestEnvironment`, which swaps `Helper.accessControlHelper` and `Helper.keyPressHelper` for mocks that exchange state with the test process through named pasteboards (`Yippy.UITesting.*`), and blanks `UserDefaults`. Extra launch args: `--Settings.testData=<name>` loads canned settings (`Settings.testData`, e.g. `a`, `ignoredApps`), and `--test-dir=<name>` replaces the app-support directory with a copy of `TestData/<name>` (it deletes the existing one, and needs `SRCROOT`). `Constants/Accessibility.swift` identifiers are compiled into both the app and `YippyUITests`, so changing one means both sides see it.
 
 ## Tests
 Unit tests mock every system dependency (`FileManagerMock`, `ArrayFileManagerMock`, `DataFileManagerMock`, loggers, `Alerter`) and inject them through the initializers of `HistoryFileManager` and `HistoryCache`; follow that style rather than touching the real file system. `YippyTests.swift` is just Xcode's placeholder.
 
-`PasteboardMonitorTests`' delegate mock still implements `pasteboardDidChange(_:)` without the `originBundleId:` parameter that `PasteboardMonitorDelegate` has required since the password-manager denylist commit, so it does not conform to the protocol. Fix it before expecting the `YippyTests` target to compile.
+Several tests wait on predicate `XCTestExpectation`s. Chaining two of them through an expectation handler always timed out on current XCTest, so await each step in turn.
+
+New source and test files must be added to `Yippy.xcodeproj/project.pbxproj`; PRs that each add files tend to conflict there.
