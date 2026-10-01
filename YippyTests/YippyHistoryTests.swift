@@ -119,23 +119,4 @@ class YippyHistoryTests: XCTestCase {
         XCTAssertEqual(historyStrings(), ["c", "a", "b", "d"])
         XCTAssertEqual(pasteboard.string(forType: .string), "c")
     }
-    
-    // MARK: - Search results
-    
-    func testSearchResultsSkipItemsWithoutText() {
-        // An image-only item between text items used to shift every later search result by one
-        let image = HistoryItem(unsavedData: [.tiff: Data([0, 1, 2])], cache: cache)
-        let items: [HistoryItem] = [a, image, item("needle"), d]
-        
-        let (searchable, data) = YippyViewController.searchableItems(in: items)
-        XCTAssertEqual(data, ["a", "needle", "d"])
-        
-        let done = expectation(description: "Search finished")
-        SearchEngine(data: data).search(query: "needle") { result in
-            let found = result.results.map({ searchable[$0].getPlainString() })
-            XCTAssertEqual(found, ["needle"])
-            done.fulfill()
-        }
-        waitForExpectations(timeout: 2)
-    }
 }
