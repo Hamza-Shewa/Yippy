@@ -20,7 +20,16 @@ class HistoryFileManager {
     var warningLogger: WarningLogger
     var alerter: Alerter
     
+    /// The folder holding one sub-folder per item plus the order file.
+    let directory: URL
+    
     static var `default` = HistoryFileManager()
+    
+    /// Storage for favourites, which are kept apart from the clipboard history so clearing or trimming the history never touches them.
+    static var favourites = HistoryFileManager(
+        orderManager: ArrayFileManager(url: Constants.urls.favouritesOrder),
+        directory: Constants.urls.favourites
+    )
     
     init(
         fileManager: FileManager = FileManager.default,
@@ -29,8 +38,10 @@ class HistoryFileManager {
         dispatchQueue: DispatchQueue? = nil,
         errorLogger: ErrorLogger = .general,
         warningLogger: WarningLogger = .general,
-        alerter: Alerter = .general
+        alerter: Alerter = .general,
+        directory: URL = Constants.urls.history
     ) {
+        self.directory = directory
         self.fileManager = fileManager
         self.orderManager = orderManager
         self.dataFileManager = dataFileManager
@@ -65,7 +76,7 @@ class HistoryFileManager {
     
     func checkHistoryDirectory() throws {
         var isDirectory: ObjCBool = false
-        let url = Constants.urls.history
+        let url = directory
         
         // File doesn't exist
         if !fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
@@ -119,16 +130,16 @@ class HistoryFileManager {
         guard let order = loadHistoryOrder() else {
             YippyWarning(localizedDescription: "Failed to retrieve order. Creating new order...").log(with: warningLogger)
             saveHistoryOrder(history: [])
-            return History(cache: cache, items: [])
+            return History(historyFM: self, cache: cache, items: [])
         }
         var items = [UUID: HistoryItem]()
         var contents = [URL]()
         
         do {
             // Get all the items
-            contents = try self.fileManager.contentsOfDirectory(at: Constants.urls.history, includingPropertiesForKeys: nil)
+            contents = try self.fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             // Remove the history order
-            contents.removeAll(where: {$0 == Constants.urls.historyOrder})
+            contents.removeAll(where: {$0 == orderManager.url})
             contents.removeAll(where: {$0.lastPathComponent == ".DS_Store"})
         }
         catch {
@@ -138,7 +149,7 @@ class HistoryFileManager {
             historyError.log(with: self.errorLogger)
             historyError.show(with: self.alerter)
             saveHistoryOrder(history: [])
-            return History(cache: cache, items: [])
+            return History(historyFM: self, cache: cache, items: [])
         }
         
         for content in contents {
@@ -199,7 +210,7 @@ class HistoryFileManager {
             saveHistoryOrder(history: orderedItems)
         }
         
-        return History(cache: cache, items: orderedItems)
+        return History(historyFM: self, cache: cache, items: orderedItems)
     }
     
     func insertItem(newHistory: [HistoryItem], at i: Int, completionHandler handler: ((Bool) -> Void)? = nil) {
@@ -316,7 +327,7 @@ class HistoryFileManager {
         dispatchQueue.async {
             // Delete the old history
             do {
-                try self.fileManager.removeItem(at: Constants.urls.history)
+                try self.fileManager.removeItem(at: self.directory)
             }
             catch {
                 let historyError = YippyError(code: 0, userInfo: [
@@ -330,7 +341,7 @@ class HistoryFileManager {
             
             // Create a new empty history
             do {
-                try self.fileManager.createDirectory(at: Constants.urls.history, withIntermediateDirectories: true)
+                try self.fileManager.createDirectory(at: self.directory, withIntermediateDirectories: true)
             }
             catch {
                 let historyError = YippyError(code: 0, userInfo: [
@@ -348,7 +359,7 @@ class HistoryFileManager {
     }
     
     func getUrl(forItemWithId id: UUID) -> URL {
-        return Constants.urls.history.appendingPathComponent("\(id.uuidString)", isDirectory: true)
+        return directory.appendingPathComponent("\(id.uuidString)", isDirectory: true)
     }
     
     func getUrl(forItemWithId id: UUID, andPasteboardType type: NSPasteboard.PasteboardType) -> URL {

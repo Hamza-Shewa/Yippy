@@ -56,7 +56,7 @@ Yippy uses [Sparkle](https://sparkle-project.org) for updates. It stays switched
 - [x] Toggle for attributed text
 - [x] Launch at login
 - [x] Convert history storage to storing each piece of data into a file organised by directory of indexes
-- [ ] Favourites
+- [x] Favourites (⌃F in the panel adds or removes the selected item)
 - [ ] Search (https://github.com/krisk/fuse-swift)
 - [x] Max history length
 - [ ] Cell height cache improvements. Will improve window size changes and launch time.

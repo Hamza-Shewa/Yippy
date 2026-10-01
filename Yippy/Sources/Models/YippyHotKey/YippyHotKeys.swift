@@ -26,6 +26,7 @@ struct YippyHotKeys {
     static var ctrlDelete = YippyHotKey(key: .delete, modifiers: [.control])
     static var ctrlSpace = YippyHotKey(key: .space, modifiers: [.control])
     static var cmdBackslash = YippyHotKey(key: .backslash, modifiers: [.command])
+    static var ctrlF = YippyHotKey(key: .f, modifiers: [.control])
     
     static var cmd0 = YippyHotKey(key: .zero, modifiers: [.command])
     static var cmd1 = YippyHotKey(key: .one, modifiers: [.command])
@@ -45,7 +46,7 @@ struct YippyHotKeys {
         return [
             `return`, escape, downArrow, upArrow, pageDown, pageUp,
             ctrlAltCmdLeftArrow, ctrlAltCmdRightArrow, ctrlAltCmdDownArrow, ctrlAltCmdUpArrow,
-            ctrlDelete, ctrlSpace, cmdBackslash,
+            ctrlDelete, ctrlSpace, cmdBackslash, ctrlF,
             cmd0, cmd1, cmd2, cmd3, cmd4, cmd5, cmd6, cmd7, cmd8, cmd9,
         ]
     }

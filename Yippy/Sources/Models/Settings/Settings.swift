@@ -22,7 +22,8 @@ struct Settings: Codable, DefaultStorable {
         toggleHotKey: KeyCombo,
         maxHistory: Int,
         showsRichText: Bool,
-        pastesRichText: Bool
+        pastesRichText: Bool,
+        ignoredAppBundleIds: [String]
     ) {
         self.panelPosition = panelPosition
         self.pasteboardChangeCount = pasteboardChangeCount
@@ -30,6 +31,19 @@ struct Settings: Codable, DefaultStorable {
         self.maxHistory = maxHistory
         self.showsRichText = showsRichText
         self.pastesRichText = pastesRichText
+        self.ignoredAppBundleIds = ignoredAppBundleIds
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.panelPosition = try container.decode(PanelPosition.self, forKey: .panelPosition)
+        self.pasteboardChangeCount = try container.decode(Int.self, forKey: .pasteboardChangeCount)
+        self.toggleHotKey = try container.decode(KeyCombo.self, forKey: .toggleHotKey)
+        self.maxHistory = try container.decode(Int.self, forKey: .maxHistory)
+        self.showsRichText = try container.decode(Bool.self, forKey: .showsRichText)
+        self.pastesRichText = try container.decode(Bool.self, forKey: .pastesRichText)
+        // Added after release, so settings saved by older versions don't have it.
+        self.ignoredAppBundleIds = try container.decodeIfPresent([String].self, forKey: .ignoredAppBundleIds) ?? []
     }
     
     static var main: Settings! {
@@ -53,7 +67,8 @@ struct Settings: Codable, DefaultStorable {
         toggleHotKey: KeyCombo(key: .v, modifiers: [.command, .shift]),
         maxHistory: Constants.settings.maxHistoryItemsDefault,
         showsRichText: true,
-        pastesRichText: true
+        pastesRichText: true,
+        ignoredAppBundleIds: []
     )
     
     // MARK: - Settings
@@ -69,6 +84,9 @@ struct Settings: Codable, DefaultStorable {
     var showsRichText: Bool
     
     var pastesRichText: Bool
+    
+    /// Bundle ids of apps whose copies are not saved to the history.
+    var ignoredAppBundleIds: [String]
     
     
     // MARK: - State Binding Methods
@@ -102,6 +120,12 @@ struct Settings: Codable, DefaultStorable {
             Settings.main.pastesRichText = x
         }
     }
+    
+    func bindIgnoredAppBundleIdsTo(state: Observable<[String]>) -> Disposable {
+        return state.bind { (x) in
+            Settings.main.ignoredAppBundleIds = x
+        }
+    }
 }
 
 extension Settings {
@@ -113,10 +137,18 @@ extension Settings {
             return settings
         }
         
+        static var ignoredApps: Settings {
+            var settings = Settings.default
+            settings.ignoredAppBundleIds = ["com.apple.TextEdit", "com.example.notInstalled"]
+            return settings
+        }
+        
         static func from(_ str: String) -> Settings? {
             switch str {
             case "--Settings.testData=a":
                 return a
+            case "--Settings.testData=ignoredApps":
+                return ignoredApps
             default:
                 return nil
             }

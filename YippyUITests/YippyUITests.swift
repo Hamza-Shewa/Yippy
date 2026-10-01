@@ -440,6 +440,80 @@ class YippyUITests: XCTestCase {
         XCTAssertEqual(remaining, allItems.filter({ $0 != "3" }))
     }
     
+    func testFavourites() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory, which has no favourites
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window and favourite "2" and "3"
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        app.getYippyTableViewCell(at: 2).click()
+        app.typeKey("f", modifierFlags: .control)
+        app.getYippyTableViewCell(at: 3).click()
+        app.typeKey("f", modifierFlags: .control)
+        XCTAssertTrue(app.yippyWindow.checkBoxes["Favourites (2)"].waitForExistence(timeout: 2))
+        
+        // The favourites tab shows them, newest first
+        app.yippyWindow.checkBoxes["Favourites (2)"].click()
+        waitForItemCount(2)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 1), "2")
+        let screenshot = XCTAttachment(screenshot: app.yippyWindow.screenshot())
+        screenshot.name = "Favourites"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        
+        // Deleting a favourite doesn't touch the clipboard history
+        app.getYippyTableViewCell(at: 0).click()
+        app.typeKey(.delete, modifierFlags: .control)
+        waitForItemCount(1)
+        XCTAssertTrue(app.yippyWindow.checkBoxes["Favourites (1)"].exists)
+        
+        app.yippyWindow.checkBoxes["Clipboard"].click()
+        waitForItemCount(count)
+    }
+    
+    func testCopyingExistingItemMovesItToTop() {
+        // Copy something
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("My latest copy", forType: .string)
+        
+        // Set settings environment
+        app.launchArguments.append("--Settings.testData=a")
+        
+        // Basic app support directory
+        app.launchArguments.append("--test-dir=A")
+        
+        // Launch app
+        app.launch()
+        
+        // Open Yippy window
+        app.pressHotKey()
+        let count = app.yippyTableViewItems.count
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 3), "3")
+        app.pressHotKey()
+        
+        // Copy "3" again
+        NSPasteboard.general.declareTypes([.string], owner: nil)
+        NSPasteboard.general.setString("3", forType: .string)
+        
+        // It moved to the top rather than being added again
+        app.pressHotKey()
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 0), "3")
+        XCTAssertEqual(app.yippyTableViewItems.count, count)
+        XCTAssertEqual(app.getYippyTableViewItemString(at: 1), "My latest copy")
+    }
+    
     func testTypes() {
         // Copy something
         NSPasteboard.general.declareTypes([.string], owner: nil)
