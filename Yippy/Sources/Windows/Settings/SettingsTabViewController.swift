@@ -16,6 +16,16 @@ class SettingsTabViewController: NSTabViewController {
         
         tabViewItems[0].image = NSImage(imageLiteralResourceName: "gear")
         tabViewItems[1].image = NSImage(imageLiteralResourceName: "command")
+        
+        let ignoredApps = NSTabViewItem(viewController: IgnoredAppsSettingsViewController())
+        ignoredApps.label = "Ignored Apps"
+        if #available(macOS 11.0, *) {
+            ignoredApps.image = NSImage(systemSymbolName: "nosign", accessibilityDescription: "Ignored Apps")
+        }
+        else {
+            ignoredApps.image = NSImage(named: NSImage.stopProgressTemplateName)
+        }
+        addTabViewItem(ignoredApps)
     }
     
     override func viewWillAppear() {
