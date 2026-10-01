@@ -207,7 +207,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. There should be an error logged
-        history.subscribe(onNext: { items in
+        history.subscribe(onNext: { items, _ in
             if items.count == 0 {
                 noItems.fulfill()
             }
@@ -231,7 +231,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. There should be a history with no items
-        history.subscribe(onNext: { items in
+        history.subscribe(onNext: { items, _ in
             if items.count == 0 {
                 noItems.fulfill()
             }
@@ -262,7 +262,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. Should contain 2 items and warnings and errors should have happened
-        history.subscribe { items in
+        history.subscribe { items, _ in
             if items.count == 2 {
                 itemsExp.fulfill()
             }
@@ -296,7 +296,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. Should contain 2 items and errors should have happened
-        history.subscribe { items in
+        history.subscribe { items, _ in
             if items.count == 2 && !items.contains(where: {$0.fsId == self.history2[1].fsId}) {
                 itemsExp.fulfill()
             }
@@ -329,7 +329,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. Should contain 2 items and errors should have happened
-        history.subscribe { items in
+        history.subscribe { items, _ in
             if items.count == 4 && items[0].fsId == storedHistory[3].fsId {
                 itemsExp.fulfill()
             }
@@ -360,7 +360,7 @@ class HistoryFileManagerTests: XCTestCase {
         let history = historyFM.loadHistory(cache: cache)
         
         // 3. Should contain 2 items and errors should have happened
-        history.subscribe { items in
+        history.subscribe { items, _ in
             if items.count == 2 && !items.contains(where: {$0.fsId == self.history2[1].fsId}) {
                 itemsExp.fulfill()
             }
@@ -411,8 +411,10 @@ class HistoryFileManagerTests: XCTestCase {
         dataFileMangaer.writeDataSucceeds[historyFM.getUrl(forItemWithId: history[0].fsId, andPasteboardType: .string)] = false
         // Expect 1 error:
         // - Fail to write data
+        // Save item failures are logged but deliberately not shown (a2c409f).
         let err = expectation(description: "Error logged")
-        let alert = expectation(description: "Error shown")
+        let alert = expectation(description: "Error not shown")
+        alert.isInverted = true
         errorLogger.expectation = err
         alerter.expectation = alert
         
