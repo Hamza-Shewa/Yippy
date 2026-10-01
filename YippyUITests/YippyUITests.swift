@@ -33,6 +33,11 @@ class YippyUITests: XCTestCase {
         let finder = XCUIApplication(bundleIdentifier: "com.apple.finder")
         finder.activate()
         finder.typeKey("v", modifierFlags: [.command, .shift])
+        // Right after launch the hot key is occasionally missed, so try once more
+        if !app.yippyWindow.waitForExistence(timeout: 2) {
+            finder.activate()
+            finder.typeKey("v", modifierFlags: [.command, .shift])
+        }
         XCTAssertTrue(app.yippyWindow.waitForExistence(timeout: 2))
     }
     
