@@ -43,10 +43,19 @@ class YippyHistory {
     ///
     /// - Parameter plainText: Paste only the item's text, without any styling. Items with no text are pasted as they are.
     func paste(selected: Int, plainText: Bool = false) {
+        guard items.indices.contains(selected) else {
+            return
+        }
+        paste(selected: selected, text: plainText ? items[selected].getUnstyledText() : nil)
+    }
+    
+    /// Pastes `text` in place of the item shown at `selected`, which still moves to the top like any paste.
+    ///
+    /// - Parameter text: The text to paste, e.g. the item's text transformed. If nil the item itself is pasted.
+    func paste(selected: Int, text plainString: String?) {
         guard let index = historyIndex(ofRow: selected) else {
             return
         }
-        let plainString = plainText ? items[selected].getUnstyledText() : nil
 
         if movesPastedItemToTop {
             // Internally action the pasteboard change

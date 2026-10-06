@@ -120,4 +120,13 @@ class FavouritesTests: XCTestCase {
         
         XCTAssertTrue(loaded.historyFM === fm)
     }
+    
+    func testToggleKeepsMetadata() {
+        let a = item("a")
+        a.metadata = HistoryItemMetadata(sourceBundleId: "com.example.editor", copiedAt: Date(timeIntervalSince1970: 100), recognizedText: "text")
+        
+        favourites.toggleFavourite(a)
+        
+        XCTAssertEqual(favourites.items[0].metadata, a.metadata)
+    }
 }

@@ -62,7 +62,7 @@ class YippyTiffCellView: YippyItemBaseCellView, YippyItem {
         // Get max height of cell based on visible on visible height
         let maxHeight = yippyTableView.visibleRect.height
         // Calculate cell height
-        let height = min(imageHeight + imagePadding.yTotal + contentViewInsets.xTotal, maxHeight)
+        let height = min(imageHeight + imagePadding.yTotal + contentViewInsets.yTotal, maxHeight)
         
         return ceil(height)
     }

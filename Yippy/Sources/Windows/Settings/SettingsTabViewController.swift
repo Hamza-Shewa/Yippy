@@ -26,6 +26,16 @@ class SettingsTabViewController: NSTabViewController {
             ignoredApps.image = NSImage(named: NSImage.stopProgressTemplateName)
         }
         addTabViewItem(ignoredApps)
+
+        let history = NSTabViewItem(viewController: HistorySettingsViewController())
+        history.label = "History"
+        if #available(macOS 11.0, *) {
+            history.image = NSImage(systemSymbolName: "clock", accessibilityDescription: "History")
+        }
+        else {
+            history.image = NSImage(named: NSImage.refreshTemplateName)
+        }
+        addTabViewItem(history)
     }
     
     override func viewWillAppear() {

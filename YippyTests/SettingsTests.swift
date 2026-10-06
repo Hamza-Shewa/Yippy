@@ -105,4 +105,18 @@ class SettingsTests: XCTestCase {
         XCTAssertEqual(IgnoredAppsSettingsViewController.add(bundleIds: ["b", "a", "c"], to: ["a"]), ["a", "b", "c"])
         XCTAssertNil(IgnoredAppsSettingsViewController.add(bundleIds: ["a"], to: ["a"]))
     }
+    
+    func testDecodesSettingsSavedBeforeHistorySettings() throws {
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(Settings.default)) as! [String: Any]
+        for key in ["maxItemAgeDays", "expiringAppBundleIds", "recognizesTextInImages"] {
+            json.removeValue(forKey: key)
+        }
+        let old = try JSONSerialization.data(withJSONObject: json)
+        
+        let settings = try JSONDecoder().decode(Settings.self, from: old)
+        
+        XCTAssertEqual(settings, Settings.default)
+        XCTAssertEqual(settings.maxItemAgeDays, 0)
+        XCTAssertFalse(settings.recognizesTextInImages)
+    }
 }

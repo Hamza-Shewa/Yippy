@@ -72,17 +72,17 @@ class YippyTableView: NSTableView {
         for row in range.location..<range.location+range.length {
             guard let cell = view(atColumn: 0, row: row, makeIfNecessary: false) as? YippyItem else { continue }
             cell.setupCell(withYippyTableView: self, forHistoryItem: yippyItems[row], at: row)
-            (cell as? YippyItemBaseCellView)?.setupFavouriteButton(withYippyTableView: self, forHistoryItem: yippyItems[row])
+            (cell as? YippyItemBaseCellView)?.setupRowControls(withYippyTableView: self, forHistoryItem: yippyItems[row])
         }
     }
     
-    /// Updates the heart on every visible row, for when the favourites change.
-    func refreshFavouriteButtons() {
+    /// Updates the heart and the info bar on every visible row, for when the favourites or an item's metadata change, or time passes.
+    func refreshRowControls() {
         let range = rows(in: visibleRect)
         guard range.location != NSNotFound else { return }
         for row in range.location..<range.location+range.length {
             guard yippyItems.indices.contains(row), let cell = view(atColumn: 0, row: row, makeIfNecessary: false) as? YippyItemBaseCellView else { continue }
-            cell.setupFavouriteButton(withYippyTableView: self, forHistoryItem: yippyItems[row])
+            cell.setupRowControls(withYippyTableView: self, forHistoryItem: yippyItems[row])
         }
     }
     
@@ -105,7 +105,7 @@ extension YippyTableView: NSTableViewDataSource {
         let itemType = historyItem.getTableViewItemType()
         let cell = tableView.makeView(withIdentifier: itemType.identifier, owner: nil) as? YippyItem ?? itemType.makeItem()
         cell.setupCell(withYippyTableView: self, forHistoryItem: historyItem, at: row)
-        (cell as? YippyItemBaseCellView)?.setupFavouriteButton(withYippyTableView: self, forHistoryItem: historyItem)
+        (cell as? YippyItemBaseCellView)?.setupRowControls(withYippyTableView: self, forHistoryItem: historyItem)
         if let cell = cell as? NSTableCellView {
             cell.setAccessibilityLabel(itemType.identifier.rawValue)
             cell.identifier = itemType.identifier

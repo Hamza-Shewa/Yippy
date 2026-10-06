@@ -126,4 +126,14 @@ class HistoryItemTests: XCTestCase {
         
         waitForExpectations(timeout: 2, handler: nil)
     }
+    
+    // MARK: - HistoryItemMetadata.timeAgo
+    func testTimeAgo() {
+        let now = Date()
+        XCTAssertEqual(HistoryItemMetadata.timeAgo(now.addingTimeInterval(-10), now: now), "just now")
+        XCTAssertEqual(HistoryItemMetadata.timeAgo(now.addingTimeInterval(-5 * 60), now: now), "5 min ago")
+        XCTAssertEqual(HistoryItemMetadata.timeAgo(now.addingTimeInterval(-3 * 60 * 60), now: now), "3 hr ago")
+        XCTAssertEqual(HistoryItemMetadata.timeAgo(now.addingTimeInterval(-30 * 60 * 60), now: now), "yesterday")
+        XCTAssertEqual(HistoryItemMetadata.timeAgo(now.addingTimeInterval(-3 * 24 * 60 * 60), now: now), "3 days ago")
+    }
 }
