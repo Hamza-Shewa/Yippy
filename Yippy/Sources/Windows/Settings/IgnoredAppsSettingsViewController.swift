@@ -6,11 +6,34 @@
 import Foundation
 import Cocoa
 import RxSwift
+import RxRelay
 
 /// Settings tab listing the apps whose copies Yippy doesn't save.
 ///
 /// Built in code rather than in `Main.storyboard`, and added to the settings tabs by `SettingsTabViewController`.
+/// `HistorySettingsViewController` reuses it for another list of apps, by passing a different relay and text.
 class IgnoredAppsSettingsViewController: NSViewController {
+
+    private let bundleIdsRelay: BehaviorRelay<[String]>
+    private let message: String
+    private let prompt: String
+    private let isIgnoredAppsList: Bool
+
+    init(
+        bundleIds: BehaviorRelay<[String]> = State.main.ignoredAppBundleIds,
+        message: String = "Yippy won't save anything copied while one of these apps is in front, e.g. a password manager.",
+        prompt: String = "Ignore"
+    ) {
+        self.bundleIdsRelay = bundleIds
+        self.message = message
+        self.prompt = prompt
+        self.isIgnoredAppsList = bundleIds === State.main.ignoredAppBundleIds
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     private let tableView = NSTableView()
     private let addRemoveControl = NSSegmentedControl()
@@ -25,7 +48,7 @@ class IgnoredAppsSettingsViewController: NSViewController {
     override func loadView() {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 450, height: 320))
 
-        let label = NSTextField(wrappingLabelWithString: "Yippy won't save anything copied while one of these apps is in front, e.g. a password manager.")
+        let label = NSTextField(wrappingLabelWithString: message)
         label.translatesAutoresizingMaskIntoConstraints = false
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("app"))
@@ -35,7 +58,9 @@ class IgnoredAppsSettingsViewController: NSViewController {
         tableView.rowHeight = 24
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.setAccessibilityIdentifier(Accessibility.identifiers.ignoredAppsTableView)
+        if isIgnoredAppsList {
+            tableView.setAccessibilityIdentifier(Accessibility.identifiers.ignoredAppsTableView)
+        }
 
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -53,7 +78,9 @@ class IgnoredAppsSettingsViewController: NSViewController {
         addRemoveControl.setWidth(24, forSegment: Self.removeSegment)
         addRemoveControl.target = self
         addRemoveControl.action = #selector(onAddRemoveClicked)
-        addRemoveControl.setAccessibilityIdentifier(Accessibility.identifiers.ignoredAppsAddRemoveControl)
+        if isIgnoredAppsList {
+            addRemoveControl.setAccessibilityIdentifier(Accessibility.identifiers.ignoredAppsAddRemoveControl)
+        }
 
         view.addSubview(label)
         view.addSubview(scrollView)
@@ -80,7 +107,7 @@ class IgnoredAppsSettingsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        State.main.ignoredAppBundleIds.subscribe(onNext: { [weak self] in
+        bundleIdsRelay.subscribe(onNext: { [weak self] in
             self?.bundleIds = $0
             self?.tableView.reloadData()
             self?.updateRemoveEnabled()
@@ -108,7 +135,7 @@ class IgnoredAppsSettingsViewController: NSViewController {
         panel.canChooseDirectories = false
         panel.allowedFileTypes = ["app"]
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        panel.prompt = "Ignore"
+        panel.prompt = prompt
 
         guard let window = view.window else {
             return
@@ -118,8 +145,8 @@ class IgnoredAppsSettingsViewController: NSViewController {
                 return
             }
             let newIds = panel.urls.compactMap({ Bundle(url: $0)?.bundleIdentifier })
-            if let ids = Self.add(bundleIds: newIds, to: State.main.ignoredAppBundleIds.value) {
-                State.main.ignoredAppBundleIds.accept(ids)
+            if let ids = Self.add(bundleIds: newIds, to: self.bundleIdsRelay.value) {
+                self.bundleIdsRelay.accept(ids)
             }
         }
     }
@@ -131,7 +158,7 @@ class IgnoredAppsSettingsViewController: NSViewController {
         }
         var ids = bundleIds
         ids.remove(at: row)
-        State.main.ignoredAppBundleIds.accept(ids)
+        bundleIdsRelay.accept(ids)
     }
 
     /// Returns `existing` with any new ids appended, or nil if nothing changed.

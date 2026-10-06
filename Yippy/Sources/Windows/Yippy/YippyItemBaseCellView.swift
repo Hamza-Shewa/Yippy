@@ -11,12 +11,16 @@ import Cocoa
 
 /// Abstract base class for all Yippy collection view items.
 ///
-/// Creates and sets up the `contentView`, `shortcutTextView`, `favouriteButton` and the `itemTextView`.
+/// Creates and sets up the `contentView`, `shortcutTextView`, `itemTextView`, and the info bar under the content
+/// (source app, when it was copied, its name and the `favouriteButton`).
 ///
 /// Handles highlight changes and the right-click menu.
 class YippyItemBaseCellView: NSTableCellView {
     
-    static let contentViewInsets = NSEdgeInsets(top: 5, left: 5, bottom: 5, right: 5)
+    /// Height of the info bar, which sits in the bottom inset.
+    static let infoBarHeight: CGFloat = 16
+    
+    static let contentViewInsets = NSEdgeInsets(top: 5, left: 5, bottom: 5 + infoBarHeight + 2, right: 5)
     
     class var identifier: NSUserInterfaceItemIdentifier {
         NSUserInterfaceItemIdentifier("YippyItemBaseCellView")
@@ -26,6 +30,8 @@ class YippyItemBaseCellView: NSTableCellView {
     var shortcutTextView: YippyItemCellTextView!
     var itemTextView: YippyItemCellTextView!
     var favouriteButton: NSButton!
+    var sourceAppIconView: NSImageView!
+    var infoTextField: NSTextField!
     
     private var lastSetSelected: Bool?
     
@@ -55,6 +61,7 @@ class YippyItemBaseCellView: NSTableCellView {
         
         layer?.backgroundColor = isSelected ? highlightColor : NSColor.clear.cgColor
         self.lastSetSelected = isSelected
+        infoTextField?.textColor = isSelected ? NSColor.white.withAlphaComponent(0.85) : .secondaryLabelColor
     }
     
     override init(frame frameRect: NSRect) {
@@ -85,6 +92,7 @@ class YippyItemBaseCellView: NSTableCellView {
         setupContentView()
         setupShortcutTextView()
         setupFavouriteButton()
+        setupInfoBar()
     }
     
     func setupContentView() {
@@ -142,7 +150,7 @@ class YippyItemBaseCellView: NSTableCellView {
     
     // MARK: - Favourite button
     
-    /// Creates the heart in the bottom right corner, which sits in the padding to the right of the item's content.
+    /// Creates the heart at the right of the info bar.
     func setupFavouriteButton() {
         favouriteButton = NSButton(frame: .zero)
         favouriteButton.translatesAutoresizingMaskIntoConstraints = false
@@ -154,11 +162,11 @@ class YippyItemBaseCellView: NSTableCellView {
         favouriteButton.setAccessibilityIdentifier(Accessibility.identifiers.yippyFavouriteButton)
         favouriteButton.wantsLayer = true
         favouriteButton.layer?.zPosition = 1
-        contentView.addSubview(favouriteButton)
+        addSubview(favouriteButton)
         
         NSLayoutConstraint.activate([
             favouriteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
-            favouriteButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -2),
+            favouriteButton.topAnchor.constraint(equalTo: contentView.bottomAnchor, constant: 2),
             favouriteButton.widthAnchor.constraint(equalToConstant: 14),
             favouriteButton.heightAnchor.constraint(equalToConstant: 14),
         ])
@@ -166,11 +174,12 @@ class YippyItemBaseCellView: NSTableCellView {
         setIsFavourite(false)
     }
     
-    /// Points the heart and the right-click menu at `historyItem`.
-    func setupFavouriteButton(withYippyTableView yippyTableView: YippyTableView, forHistoryItem historyItem: HistoryItem) {
+    /// Points the heart, the info bar and the right-click menu at `historyItem`.
+    func setupRowControls(withYippyTableView yippyTableView: YippyTableView, forHistoryItem historyItem: HistoryItem) {
         self.yippyTableView = yippyTableView
         self.historyItem = historyItem
         setIsFavourite(yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, isFavourite: historyItem) ?? false)
+        setupInfoBar(forHistoryItem: historyItem)
     }
     
     /// Fills the heart in red for a favourite, otherwise shows it as an outline.
@@ -202,6 +211,56 @@ class YippyItemBaseCellView: NSTableCellView {
         return super.hitTest(point)
     }
     
+    // MARK: - Info bar
+    
+    /// Creates the source app's icon and the line of text after it, under the item's content.
+    func setupInfoBar() {
+        sourceAppIconView = NSImageView(frame: .zero)
+        sourceAppIconView.translatesAutoresizingMaskIntoConstraints = false
+        sourceAppIconView.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(sourceAppIconView)
+        
+        infoTextField = NSTextField(labelWithString: "")
+        infoTextField.translatesAutoresizingMaskIntoConstraints = false
+        infoTextField.font = NSFont.systemFont(ofSize: 10)
+        infoTextField.textColor = .secondaryLabelColor
+        infoTextField.lineBreakMode = .byTruncatingTail
+        infoTextField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        infoTextField.setAccessibilityIdentifier(Accessibility.identifiers.yippyItemInfoText)
+        addSubview(infoTextField)
+        
+        NSLayoutConstraint.activate([
+            sourceAppIconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            sourceAppIconView.centerYAnchor.constraint(equalTo: favouriteButton.centerYAnchor),
+            sourceAppIconView.widthAnchor.constraint(equalToConstant: 14),
+            sourceAppIconView.heightAnchor.constraint(equalToConstant: 14),
+            infoTextField.leadingAnchor.constraint(equalTo: sourceAppIconView.trailingAnchor, constant: 4),
+            infoTextField.centerYAnchor.constraint(equalTo: favouriteButton.centerYAnchor),
+            infoTextField.trailingAnchor.constraint(lessThanOrEqualTo: favouriteButton.leadingAnchor, constant: -6),
+        ])
+    }
+    
+    /// Shows the item's name (if it has one), the app it was copied from and how long ago.
+    func setupInfoBar(forHistoryItem historyItem: HistoryItem) {
+        let metadata = historyItem.metadata
+        var parts = [String]()
+        if let title = metadata.title, !title.isEmpty {
+            parts.append(title)
+        }
+        if let source = metadata.sourceBundleId {
+            parts.append(AppInfo.name(forBundleId: source))
+            sourceAppIconView.image = AppInfo.icon(forBundleId: source)
+        }
+        else {
+            sourceAppIconView.image = nil
+        }
+        if let copiedAt = metadata.copiedAt {
+            parts.append(HistoryItemMetadata.timeAgo(copiedAt))
+        }
+        infoTextField.stringValue = parts.joined(separator: " · ")
+        infoTextField.toolTip = metadata.copiedAt.map({ DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short) })
+    }
+    
     @objc func favouriteButtonClicked() {
         guard let yippyTableView = yippyTableView, let historyItem = historyItem else { return }
         yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, didToggleFavouriteOf: historyItem)
@@ -226,10 +285,79 @@ class YippyItemBaseCellView: NSTableCellView {
         }
         menu.addItem(paste)
         menu.addItem(pastePlainText)
+        if let transformed = makeTransformMenuItem(for: historyItem) {
+            menu.addItem(transformed)
+        }
+        if let recognizedText = historyItem.metadata.recognizedText, !recognizedText.isEmpty {
+            menu.addItem(makePasteTextMenuItem(title: "Paste Text from Image", text: recognizedText))
+        }
         menu.addItem(NSMenuItem.separator())
         menu.addItem(favourite)
         
+        if yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, canEdit: historyItem) ?? false {
+            let rename = NSMenuItem(title: "Rename…", action: #selector(renameMenuItemClicked), keyEquivalent: "")
+            let edit = NSMenuItem(title: "Edit Text…", action: #selector(editMenuItemClicked), keyEquivalent: "")
+            edit.isEnabled = historyItem.getUnstyledText() != nil
+            for menuItem in [rename, edit] {
+                menuItem.target = self
+                menu.addItem(menuItem)
+            }
+        }
+        
+        if let source = historyItem.metadata.sourceBundleId {
+            menu.addItem(NSMenuItem.separator())
+            let filter = NSMenuItem(title: "Show Only Items from \(AppInfo.name(forBundleId: source))", action: #selector(filterByAppMenuItemClicked), keyEquivalent: "")
+            filter.target = self
+            menu.addItem(filter)
+        }
+        
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+    
+    /// The "Paste Transformed" submenu, with the transforms that change the item's text. Nil if the item has no text.
+    private func makeTransformMenuItem(for historyItem: HistoryItem) -> NSMenuItem? {
+        guard let text = historyItem.getUnstyledText() else {
+            return nil
+        }
+        let submenu = NSMenu(title: "Paste Transformed")
+        submenu.autoenablesItems = false
+        for transform in TextTransform.allCases {
+            let result = transform.apply(to: text)
+            let menuItem = makePasteTextMenuItem(title: transform.title, text: result ?? text)
+            menuItem.isEnabled = result != nil && result != text
+            submenu.addItem(menuItem)
+        }
+        let menuItem = NSMenuItem(title: "Paste Transformed", action: nil, keyEquivalent: "")
+        menuItem.submenu = submenu
+        return menuItem
+    }
+    
+    /// A menu item that pastes `text` instead of the item.
+    private func makePasteTextMenuItem(title: String, text: String) -> NSMenuItem {
+        let menuItem = NSMenuItem(title: title, action: #selector(pasteTextMenuItemClicked(_:)), keyEquivalent: "")
+        menuItem.target = self
+        menuItem.representedObject = text
+        return menuItem
+    }
+    
+    @objc private func pasteTextMenuItemClicked(_ sender: NSMenuItem) {
+        guard let yippyTableView = yippyTableView, let historyItem = historyItem, let text = sender.representedObject as? String else { return }
+        yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, didRequestPasteOf: historyItem, text: text)
+    }
+    
+    @objc private func renameMenuItemClicked() {
+        guard let yippyTableView = yippyTableView, let historyItem = historyItem else { return }
+        yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, didRequestRenameOf: historyItem)
+    }
+    
+    @objc private func editMenuItemClicked() {
+        guard let yippyTableView = yippyTableView, let historyItem = historyItem else { return }
+        yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, didRequestEditOf: historyItem)
+    }
+    
+    @objc private func filterByAppMenuItemClicked() {
+        guard let yippyTableView = yippyTableView, let source = historyItem?.metadata.sourceBundleId else { return }
+        yippyTableView.yippyDelegate?.yippyTableView(yippyTableView, didRequestItemsFromApp: source)
     }
     
     @objc private func pasteMenuItemClicked() {

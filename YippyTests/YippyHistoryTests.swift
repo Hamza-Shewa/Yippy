@@ -194,4 +194,38 @@ class YippyHistoryTests: XCTestCase {
         XCTAssertEqual(historyStrings(), ["c", "a", "b", "d"])
         XCTAssertEqual(pasteboard.string(forType: .string), "c")
     }
+    
+    // MARK: - paste(selected:text:)
+    
+    func testPasteTextPastesTheTextAndMovesItemToTop() {
+        let yippyHistory = YippyHistory(history: history, items: history.items, pasteboard: pasteboard)
+        yippyHistory.paste(selected: 2, text: "C")
+        
+        XCTAssertEqual(historyStrings(), ["c", "a", "b", "d"])
+        XCTAssertEqual(pasteboard.string(forType: .string), "C")
+    }
+    
+    // MARK: - TextTransform
+    
+    func testTextTransforms() {
+        XCTAssertEqual(TextTransform.trimWhitespace.apply(to: "  a b \n"), "a b")
+        XCTAssertEqual(TextTransform.uppercase.apply(to: "aB"), "AB")
+        XCTAssertEqual(TextTransform.lowercase.apply(to: "aB"), "ab")
+        XCTAssertEqual(TextTransform.titleCase.apply(to: "hello wORLD"), "Hello World")
+    }
+    
+    func testRemoveLinkTracking() {
+        XCTAssertEqual(
+            TextTransform.removeLinkTracking.apply(to: "See https://example.com/a?id=1&utm_source=x&fbclid=y and http://example.org/?utm_medium=z"),
+            "See https://example.com/a?id=1 and http://example.org/"
+        )
+        // Nothing to remove
+        XCTAssertEqual(TextTransform.removeLinkTracking.apply(to: "https://example.com/?q=a%20b"), "https://example.com/?q=a%20b")
+    }
+    
+    func testPrettyPrintJSON() {
+        XCTAssertEqual(TextTransform.prettyPrintJSON.apply(to: "{\"b\":1,\"a\":[true]}"), "{\n  \"a\" : [\n    true\n  ],\n  \"b\" : 1\n}")
+        XCTAssertNil(TextTransform.prettyPrintJSON.apply(to: "not json"))
+        XCTAssertNil(TextTransform.prettyPrintJSON.apply(to: "42"))
+    }
 }

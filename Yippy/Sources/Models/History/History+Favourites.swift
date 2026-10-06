@@ -67,7 +67,8 @@ extension History {
         guard let data = item.allDataIfComplete() else {
             return false
         }
-        insertItem(HistoryItem(unsavedData: data, cache: cache), at: 0)
+        // Keep where and when it was copied, and any text read from its image
+        insertItem(HistoryItem(unsavedData: data, cache: cache, metadata: item.metadata), at: 0)
         return true
     }
 }

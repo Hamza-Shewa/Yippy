@@ -23,7 +23,10 @@ struct Settings: Codable, DefaultStorable {
         maxHistory: Int,
         showsRichText: Bool,
         pastesRichText: Bool,
-        ignoredAppBundleIds: [String]
+        ignoredAppBundleIds: [String],
+        maxItemAgeDays: Int,
+        expiringAppBundleIds: [String],
+        recognizesTextInImages: Bool
     ) {
         self.panelPosition = panelPosition
         self.pasteboardChangeCount = pasteboardChangeCount
@@ -32,6 +35,9 @@ struct Settings: Codable, DefaultStorable {
         self.showsRichText = showsRichText
         self.pastesRichText = pastesRichText
         self.ignoredAppBundleIds = ignoredAppBundleIds
+        self.maxItemAgeDays = maxItemAgeDays
+        self.expiringAppBundleIds = expiringAppBundleIds
+        self.recognizesTextInImages = recognizesTextInImages
     }
     
     init(from decoder: Decoder) throws {
@@ -44,6 +50,9 @@ struct Settings: Codable, DefaultStorable {
         self.pastesRichText = try container.decode(Bool.self, forKey: .pastesRichText)
         // Added after release, so settings saved by older versions don't have it.
         self.ignoredAppBundleIds = try container.decodeIfPresent([String].self, forKey: .ignoredAppBundleIds) ?? []
+        self.maxItemAgeDays = try container.decodeIfPresent(Int.self, forKey: .maxItemAgeDays) ?? Self.default.maxItemAgeDays
+        self.expiringAppBundleIds = try container.decodeIfPresent([String].self, forKey: .expiringAppBundleIds) ?? Self.default.expiringAppBundleIds
+        self.recognizesTextInImages = try container.decodeIfPresent(Bool.self, forKey: .recognizesTextInImages) ?? Self.default.recognizesTextInImages
     }
     
     static var main: Settings! {
@@ -68,7 +77,10 @@ struct Settings: Codable, DefaultStorable {
         maxHistory: Constants.settings.maxHistoryItemsDefault,
         showsRichText: true,
         pastesRichText: true,
-        ignoredAppBundleIds: []
+        ignoredAppBundleIds: [],
+        maxItemAgeDays: 0,
+        expiringAppBundleIds: [],
+        recognizesTextInImages: false
     )
     
     // MARK: - Settings
@@ -87,6 +99,15 @@ struct Settings: Codable, DefaultStorable {
     
     /// Bundle ids of apps whose copies are not saved to the history.
     var ignoredAppBundleIds: [String]
+    
+    /// Clipboard history items older than this many days are deleted. 0 keeps them forever.
+    var maxItemAgeDays: Int
+    
+    /// Items copied from these apps are deleted after a minute (see `AutoClean`).
+    var expiringAppBundleIds: [String]
+    
+    /// Whether the text in copied images is read so search can find it (see `TextRecognizer`).
+    var recognizesTextInImages: Bool
     
     
     // MARK: - State Binding Methods
@@ -124,6 +145,24 @@ struct Settings: Codable, DefaultStorable {
     func bindIgnoredAppBundleIdsTo(state: Observable<[String]>) -> Disposable {
         return state.bind { (x) in
             Settings.main.ignoredAppBundleIds = x
+        }
+    }
+    
+    func bindMaxItemAgeDaysTo(state: Observable<Int>) -> Disposable {
+        return state.bind { (x) in
+            Settings.main.maxItemAgeDays = x
+        }
+    }
+    
+    func bindExpiringAppBundleIdsTo(state: Observable<[String]>) -> Disposable {
+        return state.bind { (x) in
+            Settings.main.expiringAppBundleIds = x
+        }
+    }
+    
+    func bindRecognizesTextInImagesTo(state: Observable<Bool>) -> Disposable {
+        return state.bind { (x) in
+            Settings.main.recognizesTextInImages = x
         }
     }
 }

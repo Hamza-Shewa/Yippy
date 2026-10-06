@@ -55,6 +55,10 @@ class History {
         case clear
         case move(from: Int, to: Int)
         case itemLimitDecreased(deletedItems: [HistoryItem])
+        /// The item at the index has new metadata, or was replaced by an edited copy.
+        case update(index: Int)
+        /// Several items were deleted at once, e.g. by `AutoClean`.
+        case deleteMany(deletedItems: [HistoryItem])
     }
     
     /// Cheap fingerprints of item contents by id, for finding duplicates. Filled lazily by `fingerprint(of:)`.
@@ -107,6 +111,7 @@ class History {
         _items.insert(item, at: i)
         subscribers.forEach({$0(_items, Change.insert(index: i))})
         historyFM.insertItem(newHistory: _items, at: i)
+        saveMetadata()
         
         if _items.count > _maxItems.value {
             let deletedItem = _items[_items.count - 1]
@@ -120,6 +125,7 @@ class History {
         fingerprints.removeValue(forKey: removed.fsId)
         subscribers.forEach({$0(_items, Change.delete(deletedItem: removed))})
         historyFM.deleteItem(newHistory: _items, deleted: removed)
+        saveMetadata()
     }
     
     func clear() {
@@ -128,6 +134,7 @@ class History {
         fingerprints = [:]
         subscribers.forEach({$0(_items, Change.clear)})
         historyFM.clearHistory()
+        saveMetadata()
     }
     
     func moveItem(at i: Int, to j: Int) {
@@ -157,6 +164,73 @@ class History {
         _items = Array(_items.prefix(maxItems))
         deletedItems.forEach({ fingerprints.removeValue(forKey: $0.fsId) })
         subscribers.forEach({$0(_items, Change.itemLimitDecreased(deletedItems: deletedItems))})
+        saveMetadata()
+    }
+    
+    /// Deletes every item `shouldDelete` returns true for, telling subscribers once.
+    ///
+    /// - Returns: The deleted items.
+    @discardableResult
+    func deleteItems(where shouldDelete: (HistoryItem) -> Bool) -> [HistoryItem] {
+        let deleted = _items.filter(shouldDelete)
+        guard !deleted.isEmpty else {
+            return []
+        }
+        let deletedIds = Set(deleted.map({ $0.fsId }))
+        _items.removeAll(where: { deletedIds.contains($0.fsId) })
+        deletedIds.forEach({ fingerprints.removeValue(forKey: $0) })
+        subscribers.forEach({$0(_items, Change.deleteMany(deletedItems: deleted))})
+        for item in deleted {
+            historyFM.deleteItem(newHistory: _items, deleted: item)
+        }
+        saveMetadata()
+        return deleted
+    }
+}
+
+// MARK: - Metadata
+extension History {
+    
+    /// Changes the metadata of the item at `i` and saves it.
+    func updateMetadata(ofItemAt i: Int, _ change: (inout HistoryItemMetadata) -> Void) {
+        let old = _items[i].metadata
+        change(&_items[i].metadata)
+        guard _items[i].metadata != old else {
+            return
+        }
+        subscribers.forEach({$0(_items, Change.update(index: i))})
+        saveMetadata()
+    }
+    
+    /// Like `updateMetadata(ofItemAt:_:)`, for the item with this id if it's still in the history.
+    func updateMetadata(ofItemWithId id: UUID, _ change: (inout HistoryItemMetadata) -> Void) {
+        if let i = _items.firstIndex(where: { $0.fsId == id }) {
+            updateMetadata(ofItemAt: i, change)
+        }
+    }
+    
+    /// Replaces the item at `i` with a new one holding `data`, keeping its place and metadata.
+    ///
+    /// Used to edit favourites. The new item gets a new id, so nothing cached for the old one is used for it.
+    func replaceItem(at i: Int, withData data: [NSPasteboard.PasteboardType: Data]) {
+        let old = _items[i]
+        let new = HistoryItem(unsavedData: data, cache: cache, metadata: old.metadata)
+        _items[i] = new
+        fingerprints.removeValue(forKey: old.fsId)
+        subscribers.forEach({$0(_items, Change.update(index: i))})
+        // Write the new item before removing the old one, so a crash in between loses nothing
+        historyFM.insertItem(newHistory: _items, at: i)
+        historyFM.deleteItem(newHistory: _items, deleted: old)
+        saveMetadata()
+    }
+    
+    /// Saves every item's metadata. `HistoryFileManager` puts the write off, so calling this after every change is cheap.
+    private func saveMetadata() {
+        var metadata = [String: HistoryItemMetadata]()
+        for item in _items {
+            metadata[item.fsId.uuidString] = item.metadata
+        }
+        historyFM.saveMetadata(metadata)
     }
 }
 
@@ -253,9 +327,13 @@ extension History: PasteboardMonitorDelegate {
                     if i != 0 {
                         moveItem(at: i, to: 0)
                     }
+                    updateMetadata(ofItemAt: 0) {
+                        $0.copiedAt = Date()
+                        $0.sourceBundleId = originBundleId
+                    }
                 }
                 else {
-                    let historyItem = HistoryItem(unsavedData: data, cache: cache)
+                    let historyItem = HistoryItem(unsavedData: data, cache: cache, metadata: HistoryItemMetadata(sourceBundleId: originBundleId, copiedAt: Date()))
                     fingerprints[historyItem.fsId] = Self.fingerprint(of: data)
                     insertItem(historyItem, at: 0)
                 }

@@ -28,4 +28,10 @@ class HistoryFileManagerMock: HistoryFileManager {
     override func moveItem(newHistory: [HistoryItem], from: Int, to: Int, completionHandler: ((Bool) -> Void)? = nil) {}
     override func reduce(oldHistory: [HistoryItem], toSize size: Int, completionHandler handler: ((Bool) -> Void)? = nil) {}
     override func clearHistory(completionHandler handler: ((Bool) -> Void)? = nil) {}
+    override func saveMetadata(_ metadata: [String: HistoryItemMetadata]) {
+        savedMetadata = metadata
+    }
+    
+    /// The metadata `History` last asked to save.
+    var savedMetadata: [String: HistoryItemMetadata]?
 }

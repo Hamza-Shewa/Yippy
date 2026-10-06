@@ -80,6 +80,7 @@ class YippyViewController: NSViewController {
             .disposed(by: disposeBag)
         
         searchBar.delegate = self
+        searchBar.placeholderString = "Search (􀆔\\)  ·  /img /link /file @app"
         
         // TODO: Fix hack to make onAllChange run initially
         selected.accept(1)
@@ -129,6 +130,8 @@ class YippyViewController: NSViewController {
         
         isPreviewShowing = false
         resetSelected()
+        // "5 min ago" has moved on since the rows were drawn
+        yippyHistoryView.refreshRowControls()
     }
     
     func resetSelected() {
@@ -158,6 +161,9 @@ class YippyViewController: NSViewController {
             default: break;
             }
         }
+        if case .update = change {
+            yippyHistoryView.refreshRowControls()
+        }
     }
     
     func onFavouritesChange(_ favourites: [HistoryItem], change: History.Change) {
@@ -171,7 +177,10 @@ class YippyViewController: NSViewController {
         }
         else {
             // The hearts in the clipboard list may have changed
-            yippyHistoryView.refreshFavouriteButtons()
+            yippyHistoryView.refreshRowControls()
+        }
+        if case .update = change {
+            yippyHistoryView.refreshRowControls()
         }
     }
     
@@ -315,6 +324,79 @@ class YippyViewController: NSViewController {
         return State.main.favourites.containsItem(withSameContentAs: item)
     }
     
+    // MARK: - Editing favourites
+    
+    /// Asks for a new name for the favourite, shown in its info bar and found by search. An empty name removes it.
+    func rename(_ item: HistoryItem) {
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.stringValue = item.metadata.title ?? ""
+        field.placeholderString = "Name"
+        
+        guard let title = runEditAlert(message: "Rename Favourite", informativeText: "The name is shown under the item and found by search.", accessoryView: field, firstResponder: field) else {
+            return
+        }
+        let history = State.main.favourites!
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        history.updateMetadata(ofItemWithId: item.fsId) { $0.title = name.isEmpty ? nil : name }
+    }
+    
+    /// Lets the favourite's text be edited. The edited favourite is plain text, without any styling it had.
+    func edit(_ item: HistoryItem) {
+        guard let text = item.getUnstyledText() else {
+            return
+        }
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 380, height: 200))
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize))
+        textView.autoresizingMask = [.width]
+        textView.isRichText = false
+        textView.font = Constants.fonts.yippyPlainText
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.string = text
+        scrollView.documentView = textView
+        
+        guard let newText = runEditAlert(message: "Edit Favourite", informativeText: "Saving keeps the text only, without any styling.", accessoryView: scrollView, firstResponder: textView, result: { textView.string }) else {
+            return
+        }
+        let history = State.main.favourites!
+        guard newText != text, !newText.isEmpty, let i = history.items.firstIndex(where: { $0.fsId == item.fsId }), let data = newText.data(using: .utf8) else {
+            return
+        }
+        history.replaceItem(at: i, withData: [.string: data])
+    }
+    
+    /// Closes the panel and shows an alert with Save and Cancel buttons around `accessoryView`.
+    ///
+    /// The panel has to close first: while it's open, Return, Escape and the arrow keys are taken by its hot keys.
+    ///
+    /// - Returns: The text from `result` (by default the text field's), or nil if cancelled.
+    private func runEditAlert(message: String, informativeText: String, accessoryView: NSView, firstResponder: NSView, result: (() -> String)? = nil) -> String? {
+        close()
+        NSApp.activate(ignoringOtherApps: true)
+        
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = informativeText
+        alert.accessoryView = accessoryView
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = firstResponder
+        let response = alert.runModal()
+        // Give the app that was in front before the panel opened its focus back
+        NSApp.hide(nil)
+        
+        guard response == .alertFirstButtonReturn else {
+            return nil
+        }
+        if let result = result {
+            return result()
+        }
+        return (accessoryView as? NSTextField)?.stringValue ?? ""
+    }
+    
     func selectGroup(_ group: ItemGroup) {
         guard group != selectedGroup.value else {
             return
@@ -403,6 +485,31 @@ extension YippyViewController: YippyTableViewDelegate {
             return
         }
         paste(selected: row, plainText: plainText)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestPasteOf item: HistoryItem, text: String) {
+        guard let row = yippyHistory.items.firstIndex(where: { $0.fsId == item.fsId }) else {
+            return
+        }
+        close()
+        yippyHistory.paste(selected: row, text: text)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, canEdit item: HistoryItem) -> Bool {
+        return yippyHistory.history === State.main.favourites
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestRenameOf item: HistoryItem) {
+        rename(item)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestEditOf item: HistoryItem) {
+        edit(item)
+    }
+    
+    func yippyTableView(_ yippyTableView: YippyTableView, didRequestItemsFromApp bundleId: String) {
+        searchBar.stringValue = SearchQuery.appFilter(forAppName: AppInfo.name(forBundleId: bundleId))
+        runSearch()
     }
 }
 

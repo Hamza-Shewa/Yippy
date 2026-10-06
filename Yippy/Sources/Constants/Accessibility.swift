@@ -47,6 +47,7 @@ class Accessibility {
         static let yippyFileIconCellView = "YippyFileIconCellView"
         static let yippyFileThumbnailCellView = "YippyFileThumbnailCellView"
         static let yippyFavouriteButton = "YippyFavouriteButton"
+        static let yippyItemInfoText = "YippyItemInfoText"
         
         static let ignoredAppsTableView = "ignoredAppsTableView"
         static let ignoredAppsAddRemoveControl = "ignoredAppsAddRemoveControl"

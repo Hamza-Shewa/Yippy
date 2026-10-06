@@ -37,6 +37,15 @@ class State {
     /// Bundle ids of apps whose copies are not saved to the history.
     var ignoredAppBundleIds: BehaviorRelay<[String]>
     
+    /// Clipboard history items older than this many days are deleted. 0 keeps them forever.
+    var maxItemAgeDays: BehaviorRelay<Int>
+    
+    /// Bundle ids of apps whose copies are deleted after a minute.
+    var expiringAppBundleIds: BehaviorRelay<[String]>
+    
+    /// Whether the text in copied images is read so search can find it.
+    var recognizesTextInImages: BehaviorRelay<Bool>
+    
     var disposeBag: DisposeBag
     
     // History
@@ -50,6 +59,9 @@ class State {
     /// Monitors the pasteboard, here it can be controlled in the future if needed.
     var pasteboardMonitor: PasteboardMonitor!
     
+    /// Reads the text in copied images while `recognizesTextInImages` is on.
+    var textRecognizer = TextRecognizer()
+    
     
     // MARK: - Constructor
     init(settings: Settings = Settings.main, disposeBag: DisposeBag = DisposeBag()) {
@@ -61,6 +73,9 @@ class State {
         self.showsRichText = BehaviorRelay<Bool>(value: settings.showsRichText)
         self.pastesRichText = BehaviorRelay<Bool>(value: settings.pastesRichText)
         self.ignoredAppBundleIds = BehaviorRelay<[String]>(value: settings.ignoredAppBundleIds)
+        self.maxItemAgeDays = BehaviorRelay<Int>(value: settings.maxItemAgeDays)
+        self.expiringAppBundleIds = BehaviorRelay<[String]>(value: settings.expiringAppBundleIds)
+        self.recognizesTextInImages = BehaviorRelay<Bool>(value: settings.recognizesTextInImages)
         self.currentScreen = BehaviorRelay<NSScreen>(value: Self.getCurrentScreen(forMouseLocation: NSEvent.mouseLocation))
         self.disposeBag = disposeBag
         
@@ -84,6 +99,8 @@ class State {
         
         Self.monitorPastesRichText(state: self)
         Self.monitorIgnoredApps(state: self)
+        Self.monitorAutoClean(state: self)
+        Self.monitorTextRecognition(state: self)
         Self.monitorMousePosition(state: self)
     }
     
@@ -96,6 +113,9 @@ class State {
         settings.bindShowsRichTextTo(state: state.showsRichText.asObservable()).disposed(by: disposeBag)
         settings.bindPastesRichTextTo(state: state.pastesRichText.asObservable()).disposed(by: disposeBag)
         settings.bindIgnoredAppBundleIdsTo(state: state.ignoredAppBundleIds.asObservable()).disposed(by: disposeBag)
+        settings.bindMaxItemAgeDaysTo(state: state.maxItemAgeDays.asObservable()).disposed(by: disposeBag)
+        settings.bindExpiringAppBundleIdsTo(state: state.expiringAppBundleIds.asObservable()).disposed(by: disposeBag)
+        settings.bindRecognizesTextInImagesTo(state: state.recognizesTextInImages.asObservable()).disposed(by: disposeBag)
     }
     
     static func monitorPastesRichText(state: State) {
@@ -108,6 +128,50 @@ class State {
         state.ignoredAppBundleIds.subscribe(onNext: {
             state.history.ignoredBundleIds = Set($0)
         }).disposed(by: state.disposeBag)
+    }
+    
+    /// Deletes expired clipboard history items when the settings change and every few seconds after.
+    static func monitorAutoClean(state: State) {
+        Observable.combineLatest(state.maxItemAgeDays, state.expiringAppBundleIds).subscribe(onNext: { _ in
+            state.cleanHistory()
+        }).disposed(by: state.disposeBag)
+        
+        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { (_) in
+            state.cleanHistory()
+        }
+    }
+    
+    /// Deletes the clipboard history items `AutoClean` says have expired.
+    func cleanHistory(now: Date = Date()) {
+        let autoClean = AutoClean(maxAgeDays: maxItemAgeDays.value, expiringBundleIds: Set(expiringAppBundleIds.value))
+        guard autoClean.isActive else {
+            return
+        }
+        // The top item is what's on the clipboard, unless something has been copied since that the history ignored
+        let topIsOnPasteboard = NSPasteboard.general.changeCount == history.lastRecordedChangeCount
+        let top = history.items.first
+        let deleted = history.deleteItems(where: { autoClean.isExpired($0.metadata, now: now) })
+        if topIsOnPasteboard, let top = top, deleted.contains(where: { $0 === top }) {
+            // Don't leave it on the clipboard either. The pasteboard also can't fulfil its promise for the deleted item.
+            history.recordPasteboardChange(withCount: NSPasteboard.general.clearContents())
+        }
+    }
+    
+    /// Reads the text in images while the setting is on: all unread ones when it's turned on, then each new one.
+    static func monitorTextRecognition(state: State) {
+        state.recognizesTextInImages.distinctUntilChanged().subscribe(onNext: {
+            state.textRecognizer.isEnabled = $0 && TextRecognizer.isAvailable
+            state.textRecognizer.enqueue(state.history.items, in: state.history)
+            state.textRecognizer.enqueue(state.favourites.items, in: state.favourites)
+        }).disposed(by: state.disposeBag)
+        
+        for history in [state.history!, state.favourites!] {
+            history.subscribe(onNext: { items, change in
+                if case .insert(let i) = change {
+                    state.textRecognizer.enqueue([items[i]], in: history)
+                }
+            })
+        }
     }
     
     static func monitorMousePosition(state: State) {

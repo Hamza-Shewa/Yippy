@@ -153,6 +153,11 @@
 		B8A057305B33D2028FC0EC05 /* Pods_YippyUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 06717A6CF5535260A83784EF /* Pods_YippyUITests.framework */; };
 		CC47FBDA044C990678898C1F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 182CD28FD53E73C83ED49E26 /* Sparkle */; };
 		D104B1D4E210055A8E6424F0 /* Pods_YippyTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1AA8E9C3FA65CDE7DA527C7 /* Pods_YippyTests.framework */; };
+		3B5BEA4458C2C1ACEACC4B80 /* HistoryItemMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = F662D5929B23E4D1FF47F098 /* HistoryItemMetadata.swift */; };
+		1C495D392485B7B59521F6A4 /* AutoClean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392D23D5A1A80B5582F57DB6 /* AutoClean.swift */; };
+		43D92B51CE83005685C7E288 /* TextTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7043513AB8A89CFAC80C871E /* TextTransform.swift */; };
+		319B5DA068EDA9D610A5EE3C /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E35BADFF2422A4570649BE /* TextRecognizer.swift */; };
+		01CF5D29CC1F8C045A2D2D84 /* HistorySettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08CFEA05A8196167D6EBE28 /* HistorySettingsViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -334,6 +339,11 @@
 		E64E0EE8F7B5AE23FF150E45 /* Pods-Yippy.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yippy.release.xcconfig"; path = "Target Support Files/Pods-Yippy/Pods-Yippy.release.xcconfig"; sourceTree = "<group>"; };
 		F4C0110299C415BE39AB83CB /* SettingsUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
 		FEE6024221D8C9C221BBE212 /* Pods-YippyUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YippyUITests.release.xcconfig"; path = "Target Support Files/Pods-YippyUITests/Pods-YippyUITests.release.xcconfig"; sourceTree = "<group>"; };
+		F662D5929B23E4D1FF47F098 /* HistoryItemMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryItemMetadata.swift; sourceTree = "<group>"; };
+		392D23D5A1A80B5582F57DB6 /* AutoClean.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AutoClean.swift; sourceTree = "<group>"; };
+		7043513AB8A89CFAC80C871E /* TextTransform.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextTransform.swift; sourceTree = "<group>"; };
+		97E35BADFF2422A4570649BE /* TextRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextRecognizer.swift; sourceTree = "<group>"; };
+		C08CFEA05A8196167D6EBE28 /* HistorySettingsViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistorySettingsViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -499,6 +509,7 @@
 				3496BADA2442B28A00D110AE /* SettingsTabViewController.swift */,
 				34417676240863930076BEDA /* SettingsWindowController.swift */,
 				AD43B4E33629AB762388875D /* IgnoredAppsSettingsViewController.swift */,
+				C08CFEA05A8196167D6EBE28 /* HistorySettingsViewController.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -655,6 +666,8 @@
 				348D525E2387667D0024A5C7 /* YippyHotKey */,
 				341FFEE82442EDA500C47E6D /* HistoryItemText.swift */,
 				7989D48FDBF446F358D44D87 /* Updater.swift */,
+				97E35BADFF2422A4570649BE /* TextRecognizer.swift */,
+				7043513AB8A89CFAC80C871E /* TextTransform.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -702,6 +715,8 @@
 				34F1047C23542CCE00B65251 /* HistoryItem+YippyItem.swift */,
 				34CA01FD235D3AE700EB067C /* DataFileManager.swift */,
 				DD4C98CD972B9E8B30B9BB22 /* History+Favourites.swift */,
+				392D23D5A1A80B5582F57DB6 /* AutoClean.swift */,
+				F662D5929B23E4D1FF47F098 /* HistoryItemMetadata.swift */,
 			);
 			path = History;
 			sourceTree = "<group>";
@@ -1176,6 +1191,11 @@
 				3989D3C26413F9024C186FCC /* Updater.swift in Sources */,
 				3CF699DE9CAEC3DDC992C044 /* History+Favourites.swift in Sources */,
 				5ECB69F201C8F92C82C18B17 /* IgnoredAppsSettingsViewController.swift in Sources */,
+				01CF5D29CC1F8C045A2D2D84 /* HistorySettingsViewController.swift in Sources */,
+				319B5DA068EDA9D610A5EE3C /* TextRecognizer.swift in Sources */,
+				43D92B51CE83005685C7E288 /* TextTransform.swift in Sources */,
+				1C495D392485B7B59521F6A4 /* AutoClean.swift in Sources */,
+				3B5BEA4458C2C1ACEACC4B80 /* HistoryItemMetadata.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

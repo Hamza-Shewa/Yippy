@@ -39,6 +39,9 @@ class HistoryItem: NSObject {
     /// File system id. Unique name of the folder contains the data for this item
     let fsId: UUID
     
+    /// Where and when the item was copied, its name and the text in its image. Saved by `History`, which owns the item.
+    var metadata: HistoryItemMetadata
+    
     /// Whether the item is being cached.
     var isCached: Bool {
         return cache.isItemRegistered(fsId)
@@ -60,11 +63,13 @@ class HistoryItem: NSObject {
     ///
     /// - Parameter unsavedData: Pastebaord data that has not yet been saved to disk.
     /// - Parameter cache: `HistoryCache` to use for caching if this item starts using caching.
-    init(unsavedData: [NSPasteboard.PasteboardType: Data], cache: HistoryCache) {
+    /// - Parameter metadata: Where and when the item was copied.
+    init(unsavedData: [NSPasteboard.PasteboardType: Data], cache: HistoryCache, metadata: HistoryItemMetadata = HistoryItemMetadata()) {
         self._unsavedData = unsavedData
         self.types = unsavedData.keys.map({$0})
         self.cache = cache
         self.fsId = UUID()
+        self.metadata = metadata
     }
     
     /// Creates a `HistoryItem` for an item that is saved to disk.
@@ -72,11 +77,13 @@ class HistoryItem: NSObject {
     /// - Parameter fsId: The unique id of the item.
     /// - Parameter types: The types of pasteboard data that this item contains.
     /// - Parameter cache: `HistoryCache` to use for caching.
-    init(fsId: UUID, types: [NSPasteboard.PasteboardType], cache: HistoryCache) {
+    /// - Parameter metadata: The item's saved metadata.
+    init(fsId: UUID, types: [NSPasteboard.PasteboardType], cache: HistoryCache, metadata: HistoryItemMetadata = HistoryItemMetadata()) {
         self.fsId = fsId
         self._unsavedData = nil
         self.types = types
         self.cache = cache
+        self.metadata = metadata
         self.cache.registerItem(withId: fsId)
     }
     
@@ -127,6 +134,11 @@ class HistoryItem: NSObject {
     func stopCaching(unsavedData: [NSPasteboard.PasteboardType: Data]? = nil) {
         self._unsavedData = unsavedData
         cache.unregisterItem(withId: fsId)
+    }
+    
+    /// Whether the item is an image, rather than a file or text.
+    var isImage: Bool {
+        return (types.contains(.tiff) || types.contains(.png)) && !types.contains(.fileURL)
     }
     
     func getImage() -> NSImage? {

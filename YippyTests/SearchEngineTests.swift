@@ -110,4 +110,61 @@ class SearchEngineTests: XCTestCase {
             _ = search(engine, "zzz", in: items)
         }
     }
+    
+    // MARK: - Filters
+    
+    func testSearchQueryParsesFilters() {
+        let query = SearchQuery("/img hello @Safari /LINK world /unknown")
+        XCTAssertEqual(query.text, "hello world /unknown")
+        XCTAssertEqual(query.kinds, [.image, .link])
+        XCTAssertEqual(query.apps, ["safari"])
+        // A lone / or @ is just text
+        XCTAssertEqual(SearchQuery("/ @").text, "/ @")
+    }
+    
+    func testItemKind() {
+        XCTAssertEqual(ItemKind.of(types: [.string], plainText: "hello"), .text)
+        XCTAssertEqual(ItemKind.of(types: [.string], plainText: " https://example.com/a?b=c "), .link)
+        XCTAssertEqual(ItemKind.of(types: [.string], plainText: "see https://example.com"), .text)
+        XCTAssertEqual(ItemKind.of(types: [.tiff], plainText: nil), .image)
+        XCTAssertEqual(ItemKind.of(types: [.fileURL, .tiff], plainText: nil), .file)
+        XCTAssertEqual(ItemKind.of(types: [.color], plainText: nil), .color)
+    }
+    
+    func testFilterByKindWithoutText() {
+        let image = HistoryItem(unsavedData: [.tiff: Data([0, 1, 2])], cache: cache)
+        let link = item("https://example.com")
+        let items = [item("a"), image, link]
+        
+        XCTAssertEqual(search(SearchEngine(), "/img", in: items).count, 1)
+        XCTAssertEqual(search(SearchEngine(), "/link", in: items), ["https://example.com"])
+        XCTAssertEqual(search(SearchEngine(), "/text", in: items), ["a"])
+    }
+    
+    func testFilterByApp() {
+        let a = item("from editor")
+        a.metadata.sourceBundleId = "com.example.editor"
+        let b = item("from terminal")
+        b.metadata.sourceBundleId = "com.example.terminal"
+        
+        // Apps that aren't installed are matched by bundle id
+        XCTAssertEqual(search(SearchEngine(), "@terminal", in: [a, b, item("unknown")]), ["from terminal"])
+        XCTAssertEqual(search(SearchEngine(), "@example from", in: [a, b]), ["from editor", "from terminal"])
+    }
+    
+    func testSearchFindsTitleAndRecognizedText() {
+        let named = item("abc")
+        named.metadata.title = "Home address"
+        let image = HistoryItem(unsavedData: [.tiff: Data([0, 1, 2])], cache: cache)
+        image.metadata.recognizedText = "Invoice total"
+        
+        let engine = SearchEngine()
+        XCTAssertEqual(search(engine, "address", in: [named, image]), ["abc"])
+        let found = expectation(description: "Search finished")
+        engine.search(query: "invoice", in: [named, image]) { matches in
+            XCTAssertEqual(matches, [image])
+            found.fulfill()
+        }
+        waitForExpectations(timeout: 5)
+    }
 }

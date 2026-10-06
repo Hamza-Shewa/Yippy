@@ -126,6 +126,52 @@ class HistoryFileManager {
         }
     }
     
+    // MARK: - Metadata
+    
+    /// The file holding every item's `HistoryItemMetadata`, keyed by item id.
+    var metadataUrl: URL {
+        return directory.appendingPathComponent("metadata.plist", isDirectory: false)
+    }
+    
+    /// The newest metadata waiting to be written, and whether a write is scheduled. Main thread only.
+    private var pendingMetadata: [String: HistoryItemMetadata]?
+    
+    /// Saves the metadata of a history's items, replacing what was saved before.
+    ///
+    /// Every copy changes the metadata, so writes are put off for a moment and only the newest one is written.
+    /// Call on the main thread.
+    func saveMetadata(_ metadata: [String: HistoryItemMetadata]) {
+        let isScheduled = pendingMetadata != nil
+        pendingMetadata = metadata
+        if isScheduled {
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard let metadata = self.pendingMetadata else {
+                return
+            }
+            self.pendingMetadata = nil
+            self.dispatchQueue.async {
+                do {
+                    try self.checkHistoryDirectory()
+                    let data = try PropertyListEncoder().encode(metadata)
+                    try self.dataFileManager.writeData(data, to: self.metadataUrl, options: .atomic)
+                }
+                catch {
+                    YippyError(localizedDescription: "Failed to save the history's metadata due to error: \(error.localizedDescription)").log(with: self.errorLogger)
+                }
+            }
+        }
+    }
+    
+    /// The saved metadata by item id. Empty if there is none, as for histories saved by older versions.
+    func loadMetadata() -> [String: HistoryItemMetadata] {
+        guard let data = try? dataFileManager.loadData(contentsOf: metadataUrl) else {
+            return [:]
+        }
+        return (try? PropertyListDecoder().decode([String: HistoryItemMetadata].self, from: data)) ?? [:]
+    }
+    
     func loadHistory(cache: HistoryCache) -> History {
         guard let order = loadHistoryOrder() else {
             YippyWarning(localizedDescription: "Failed to retrieve order. Creating new order...").log(with: warningLogger)
@@ -138,8 +184,9 @@ class HistoryFileManager {
         do {
             // Get all the items
             contents = try self.fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            // Remove the history order
+            // Remove the history order and metadata
             contents.removeAll(where: {$0 == orderManager.url})
+            contents.removeAll(where: {$0.lastPathComponent == metadataUrl.lastPathComponent})
             contents.removeAll(where: {$0.lastPathComponent == ".DS_Store"})
         }
         catch {
@@ -152,6 +199,8 @@ class HistoryFileManager {
             return History(historyFM: self, cache: cache, items: [])
         }
         
+        let metadata = loadMetadata()
+        
         for content in contents {
             // Get the id and build the item
             if let id = UUID(uuidString: content.lastPathComponent) {
@@ -160,7 +209,11 @@ class HistoryFileManager {
                     let dataUrls = try self.fileManager.contentsOfDirectory(at: content, includingPropertiesForKeys: nil)
                     // and create the types
                     let types = dataUrls.map({NSPasteboard.PasteboardType($0.lastPathComponent)})
-                    items[id] = HistoryItem(fsId: id, types: types, cache: cache)
+                    // Items saved before metadata existed were copied when their folder was created
+                    let itemMetadata = metadata[id.uuidString] ?? HistoryItemMetadata(
+                        copiedAt: (try? self.fileManager.attributesOfItem(atPath: content.path))?[.creationDate] as? Date
+                    )
+                    items[id] = HistoryItem(fsId: id, types: types, cache: cache, metadata: itemMetadata)
                 }
                 catch {
                     let historyError = YippyError(code: 0, userInfo: [
