@@ -41,6 +41,9 @@ __Yippy__ is used for running and archiving a production build of Yippy. __Yippy
 
 To share the installer, sign it with a Developer ID Application certificate and notarize it. Otherwise Gatekeeper blocks it on other Macs. Create the notary profile once with `xcrun notarytool store-credentials PROFILE`. `--appcast DIR` copies the `.dmg` into your releases folder and runs Sparkle's `generate_appcast` (see "Automatic updates"). Run `./create-installer.sh --help` for every option.
 
+### Automatic releases
+`.github/workflows/release.yml` runs on every push or merge to `master` (except changes to Markdown files). It builds the installer with `create-installer.sh` and publishes it as a GitHub release with a generated changelog. The version is `MARKETING_VERSION` from the Xcode project if no tag for it exists yet, otherwise the latest tag with its patch number incremented, so ordinary merges give 2.8.2, 2.8.3 and so on. To start a new minor or major version, raise `MARKETING_VERSION` above the latest tag. The build number (`CFBundleVersion`) is the workflow run number. Releases are ad-hoc signed; add a Developer ID certificate and notarization to the workflow to ship installers that open on other Macs without a Gatekeeper warning.
+
 ### Automatic updates
 Yippy uses [Sparkle](https://sparkle-project.org) for updates. It stays switched off (no updater, no "Check for Updates..." menu item) until `SUFeedURL` and `SUPublicEDKey` in `Yippy/Supporting Files/Info.plist` are filled in. To turn it on:
 
