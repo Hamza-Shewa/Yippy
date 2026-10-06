@@ -1,0 +1,62 @@
+name: Release
+
+# Every push or merge to master builds the installer and publishes it as a new GitHub release.
+#
+# The version is MARKETING_VERSION from the Xcode project, unless a tag for it (or a later one)
+# already exists, in which case the patch number of the latest tag is incremented. To start a new
+# minor or major version, raise MARKETING_VERSION in the project above the latest tag.
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+
+# One release at a time, so two quick merges can't pick the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Work out the next version
+        id: version
+        run: |
+          base="$(grep -m1 'MARKETING_VERSION = ' Yippy.xcodeproj/project.pbxproj | sed -E 's/.*= ([0-9.]+);.*/\1/')"
+          latest="$(git tag --list | sed -E 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          echo "Project version: $base, latest tag: ${latest:-none}"
+          highest="$(printf '%s\n%s\n' "${latest:-0.0.0}" "$base" | sort -V | tail -n 1)"
+          if [ "$highest" = "$base" ] && [ "$base" != "$latest" ]; then
+            version="$base"
+          else
+            IFS=. read -r major minor patch <<< "$latest"
+            version="$major.$minor.$((patch + 1))"
+          fi
+          echo "Releasing $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the installer
+        run: ./create-installer.sh --version "${{ steps.version.outputs.version }}" --build-number "${{ github.run_number }}"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          dmg="$(ls build/installer/*.dmg)"
+          gh release create "$tag" "$dmg" \
+            --target "${{ github.sha }}" \
+            --title "Yippy ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --notes "Ad-hoc signed build: on first launch, right-click the app and choose Open, then grant Accessibility access."

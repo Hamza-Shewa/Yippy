@@ -27,6 +27,8 @@ Options:
                              Needs a Developer ID --sign identity.
   --deployment-target VER    Override MACOSX_DEPLOYMENT_TARGET for the build. Defaults to the
                              project's value, or 12.0 on Xcode 26+ which rejects older targets.
+  --version VER              Build with this CFBundleShortVersionString (MARKETING_VERSION) instead of the project's.
+  --build-number N           Build with this CFBundleVersion (CURRENT_PROJECT_VERSION). Sparkle compares it to find newer releases.
   --appcast DIR              Copy the .dmg into DIR (your folder of releases) and run Sparkle's
                              generate_appcast on it to update DIR/appcast.xml.
   -h, --help                 Show this help.
@@ -41,6 +43,8 @@ OUTPUT_DIR=""
 SIGN_IDENTITY="-"
 NOTARY_PROFILE=""
 DEPLOYMENT_TARGET=""
+VERSION_OVERRIDE=""
+BUILD_NUMBER=""
 APPCAST_DIR=""
 
 while [ $# -gt 0 ]; do
@@ -51,6 +55,8 @@ while [ $# -gt 0 ]; do
         --sign) SIGN_IDENTITY="$2"; shift 2 ;;
         --notarize) NOTARY_PROFILE="$2"; shift 2 ;;
         --deployment-target) DEPLOYMENT_TARGET="$2"; shift 2 ;;
+        --version) VERSION_OVERRIDE="$2"; shift 2 ;;
+        --build-number) BUILD_NUMBER="$2"; shift 2 ;;
         --appcast) APPCAST_DIR="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -93,6 +99,13 @@ if [ -z "$APP_PATH" ]; then
     fi
     if [ -n "$DEPLOYMENT_TARGET" ]; then
         BUILD_SETTINGS+=(MACOSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET")
+    fi
+
+    if [ -n "$VERSION_OVERRIDE" ]; then
+        BUILD_SETTINGS+=(MARKETING_VERSION="$VERSION_OVERRIDE")
+    fi
+    if [ -n "$BUILD_NUMBER" ]; then
+        BUILD_SETTINGS+=(CURRENT_PROJECT_VERSION="$BUILD_NUMBER")
     fi
 
     ARCHIVE="$BUILD_DIR/$SCHEME.xcarchive"
